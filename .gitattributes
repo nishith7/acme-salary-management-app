@@ -1,0 +1,11 @@
+# Normalise line endings to LF (avoids CRLF noise and Prettier/ESLint clashes on Windows)
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
