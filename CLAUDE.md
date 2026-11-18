@@ -54,6 +54,8 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - `DATABASE_URL` is the pooled Neon URL (API runtime); `DIRECT_URL` is the direct URL (migrations, seed). Never print either.
 - Prisma CLI, client and adapter are pinned to exactly **7.10.1**. npm's `latest` tag is a release candidate; always pin.
 - Do not run `npx prisma init` again: it injects unrequested third-party files.
+- The Prisma client is generated into `src/generated/prisma` (gitignored) by `postinstall`. Run `npm run prisma:generate` after editing `schema.prisma`.
+- `GET /health` is liveness and must never touch the database; `GET /health/ready` is readiness and does. Keep it that way so platform polling cannot keep Neon awake.
 - Use framework defaults before adding libraries. Check `https://docs.nestjs.com/llms.txt` for Nest 12 specifics.
 
 ## Housekeeping

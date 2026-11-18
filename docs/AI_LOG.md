@@ -67,3 +67,15 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
 
 - **Asked:** make sure the artifacts the brief requires are all present.
 - **AI:** audited what existed, then wrote the missing pieces: [architecture.md](architecture.md) (diagrams), [plan.md](plan.md), [performance.md](performance.md), [CLAUDE.md](../CLAUDE.md), and this log. Performance numbers are marked TBD rather than invented, and the data model is labelled proposed until the schema migration lands.
+
+### 9. Database wiring and health endpoints, test-first (19 Nov 2026)
+
+- **Asked:** continue with the Nest-side database connection.
+- **AI:** wrote the specs for environment validation and the health service first and confirmed they failed (module not found), then implemented until green.
+- **Design decisions made by the AI, for the author to review:**
+  - Two endpoints instead of one. `/health` never touches the database; `/health/ready` does. A platform health check that queried the database every few seconds would keep Neon awake and use up free-tier compute.
+  - The Prisma client is generated into `src/generated/prisma`, not the `../generated/prisma` that `prisma init` suggested, because `nest build` compiles only `src/`.
+  - The database connection is lazy, so a sleeping database never blocks startup.
+  - Environment validation and the readiness error never include connection strings or driver errors; both have a test for that.
+  - Removed the scaffold's "Hello World" controller and its tests rather than keeping dead code.
+- **Verified by running it:** 12 unit tests, 3 e2e tests (with a fake database), lint and build pass. The compiled app was then started against the real Neon database: `/health` returned 200 and `/health/ready` returned 200 with `database: up`. A fresh `npm install` regenerates the client through `postinstall`.

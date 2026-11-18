@@ -31,6 +31,8 @@
 ## 4. Environment realities
 
 - **Neon** may suspend an idle database, so the first query after a quiet period is slower. **Render's** free tier can also sleep the API. Both are warmed up before the demo recording, and the README says so.
+- **Health checks are split on purpose.** `GET /health` (liveness) never touches the database, so a platform polling it does not keep Neon awake or burn its free compute hours. `GET /health/ready` (readiness) runs `SELECT 1` and is meant for manual checks and deploy verification.
+- **First observation, not a benchmark:** from a local machine to Neon (us-east-1, pooled endpoint), the first `/health/ready` call after the API started took about 2.3 s (new connection, possibly a database wake-up) and the next took about 230 ms. Cold-start cost is real and is why the demo is warmed up first.
 - Measurements are taken against the deployed stack as well as locally, because network latency to Neon is part of what the user feels.
 
 ## 5. Measurement plan and results
