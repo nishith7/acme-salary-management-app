@@ -19,6 +19,9 @@ Plan and status: [docs/plan.md](docs/plan.md). Design: [docs/architecture.md](do
 | `npm run start:dev` | API in watch mode |
 | `npm test` | unit tests (Vitest) |
 | `npm run test:e2e` | e2e tests |
+| `npm run test:integration` | tests against the real database (needs a migrated `DATABASE_URL`) |
+| `npm run prisma:migrate` | create (and apply) a migration in development; add `-- --create-only --name <name>` to only generate it |
+| `npm run prisma:deploy` | apply existing migrations |
 | `npm run lint` | oxlint |
 | `npm run build` | compile |
 
@@ -40,7 +43,7 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 
 - Write the test first for domain logic and services.
 - Unit tests are fast and deterministic: no network, no real database, no wall-clock or randomness (inject a clock, fix seeds).
-- Integration tests hit a real Postgres, and only for what mocks cannot prove (migrations, raw SQL, pagination).
+- Integration tests hit a real Postgres, and only for what mocks cannot prove (migrations, raw SQL, pagination). They run inside transactions that are always rolled back (`inRollback` in `test/support/test-db.ts`), so they leave no data behind.
 - e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client.
 - Test names state behaviour, e.g. `returns tenure band 3-5 for 4 years of service`.
 
@@ -57,6 +60,9 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - `DATABASE_URL` is the pooled Neon URL (API runtime); `DIRECT_URL` is the direct URL (migrations, seed). Never print either.
 - Prisma CLI, client and adapter are pinned to exactly **7.10.1**. npm's `latest` tag is a release candidate; always pin.
 - Do not run `npx prisma init` again: it injects unrequested third-party files.
+- **Schema work is one table at a time.** Edit `schema.prisma`, show the columns for review, write the integration test first, generate the SQL with `npm run prisma:migrate -- --create-only --name <name>`, review it, then apply with `npm run prisma:deploy`. Never hand-write migration SQL without asking.
+- Run Prisma only from `backend/` or through the npm scripts. `npx prisma` anywhere else downloads the 8.0 release candidate, which has a different workflow ("contracts").
+- Prisma's docs now default to the 8 release candidate. Use the version 7 docs: https://www.prisma.io/docs/llms/orm-v7.txt
 - The Prisma client is generated into `src/generated/prisma` (gitignored) by `postinstall`. Run `npm run prisma:generate` after editing `schema.prisma`.
 - `GET /health` is liveness and must never touch the database; `GET /health/ready` is readiness and does. Keep it that way so platform polling cannot keep Neon awake.
 - Use framework defaults before adding libraries. Check `https://docs.nestjs.com/llms.txt` for Nest 12 specifics.

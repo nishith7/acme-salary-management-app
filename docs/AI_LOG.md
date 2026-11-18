@@ -89,3 +89,13 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
   - Response bodies are DTO classes with `@ApiProperty`, and the service builds its error body from the same DTO type, so the documentation and the runtime response cannot drift apart silently.
   - Swagger is on in every environment on purpose, so reviewers can explore the deployed API. Authentication will be added to the document when auth is built.
 - **Verification:** the IDE reported errors for imports that no longer existed. The real compiler was run instead of trusting it: unit (12), e2e (8), lint and build all pass. The compiled app was then started and `/docs` and `/docs-json` fetched.
+
+### 11. Database schema, one table at a time (19 Nov 2026)
+
+- **AI error (pace):** the AI wrote a 10-table schema in one go, and planned to hand-edit migration SQL to add CHECK constraints. The author stopped it: they expected migrations to be generated from the model, and wanted one table at a time with the columns reviewed first.
+- **Fix:** the draft was archived outside the repo. The generated migration was deleted only after confirming the database had no applied migrations, and the schema was cut back to the `User` table. The columns were reviewed and approved (UUID id, `name` kept, email lowercased by the app) before any migration was generated.
+- **Process now:** model one table, review its columns, write the integration test first (4 tests failing against the real database), have Prisma generate the migration, review the SQL, apply it, see the tests pass.
+- **Prisma versions:** the author had read the Prisma 8 docs, where a "contract" is the source of truth and migrations are TypeScript. The AI read those docs, explained that the pinned 7.10.1 works differently (`schema.prisma` produces SQL migrations and the client), said it only had a summary of version 8 and would not guess its commands, and recommended staying on the stable version. The author chose to stay on 7.10.1.
+- **Wrong-directory incident:** `npx prisma` run from the repo root, outside `backend/`, downloaded the 8.0 release candidate instead of the pinned CLI. Nothing was changed. The rule to run Prisma from `backend/` is now in `CLAUDE.md`.
+- **Observation:** after the migration, a `playing_with_neon` table appeared in the database. This project did not create it (the name matches Neon's console sample table), so it was left alone.
+- **Verified:** 4 integration tests pass in rolled-back transactions; unit (12), e2e (8), lint and build still pass.
