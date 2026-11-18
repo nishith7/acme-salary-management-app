@@ -7,12 +7,12 @@
 | Layer | Choice |
 |---|---|
 | Language | TypeScript (strict) in both packages |
-| API | NestJS, REST, class-validator, Swagger/OpenAPI |
+| API | NestJS 12 (ESM), REST, Swagger/OpenAPI; request-validation library chosen with the first endpoint |
 | Database | PostgreSQL 16 with Prisma (migrations + typed client) |
 | Auth | JWT, `HR_ADMIN` role guard, ownership checks in the service layer |
 | UI | React + Vite, shadcn/ui + Tailwind, TanStack Table + Query, Recharts |
-| Tests | Jest + Supertest (API), Vitest + Testing Library (UI) |
-| Quality | ESLint, Prettier, Husky + lint-staged, commitlint, GitHub Actions |
+| Tests | Vitest in both packages: + Supertest for the API, + Testing Library for the UI |
+| Quality | oxlint (Nest 12 default) for the API, ESLint for the UI, Prettier, Husky + lint-staged, commitlint, GitHub Actions |
 | Hosting | Neon (Postgres), Render (API), Vercel (UI) |
 
 ## Decisions and trade-offs
