@@ -79,3 +79,13 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
   - Environment validation and the readiness error never include connection strings or driver errors; both have a test for that.
   - Removed the scaffold's "Hello World" controller and its tests rather than keeping dead code.
 - **Verified by running it:** 12 unit tests, 3 e2e tests (with a fake database), lint and build pass. The compiled app was then started against the real Neon database: `/health` returned 200 and `/health/ready` returned 200 with `database: up`. A fresh `npm install` regenerates the client through `postinstall`.
+
+### 10. Swagger and API documentation, test-first (19 Nov 2026)
+
+- **Asked:** set up Swagger and document the health endpoints with it.
+- **AI:** wrote a Swagger e2e spec first (UI served at `/docs`; the OpenAPI document lists both health routes with their status codes and response schemas) and confirmed it failed. Then implemented it.
+- **Design decisions made by the AI, for the author to review:**
+  - App-wide setup moved into `configureApp` in `src/app.setup.ts`, and e2e tests get a shared `createTestApp()` that calls it. Tests therefore exercise the same setup as production, and later additions (validation pipe, prefixes) are covered automatically.
+  - Response bodies are DTO classes with `@ApiProperty`, and the service builds its error body from the same DTO type, so the documentation and the runtime response cannot drift apart silently.
+  - Swagger is on in every environment on purpose, so reviewers can explore the deployed API. Authentication will be added to the document when auth is built.
+- **Verification:** the IDE reported errors for imports that no longer existed. The real compiler was run instead of trusting it: unit (12), e2e (8), lint and build all pass. The compiled app was then started and `/docs` and `/docs-json` fetched.

@@ -33,12 +33,15 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - **Money is `Decimal`, never `number` or float.** Salary history is append-only.
 - Aggregations (median, percentiles, totals) run in SQL, not in application code.
 - Insight endpoints must not return segments with fewer than 5 people.
+- Every endpoint is documented in Swagger: `@ApiTags`, `@ApiOperation`, `@ApiOkResponse` plus its error responses. Response bodies are DTO classes with `@ApiProperty`. The UI is served at `/docs`.
+- App-wide setup (Swagger now; pipes and prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
 
 ## Testing rules
 
 - Write the test first for domain logic and services.
 - Unit tests are fast and deterministic: no network, no real database, no wall-clock or randomness (inject a clock, fix seeds).
 - Integration tests hit a real Postgres, and only for what mocks cannot prove (migrations, raw SQL, pagination).
+- e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client.
 - Test names state behaviour, e.g. `returns tenure band 3-5 for 4 years of service`.
 
 ## Git rules

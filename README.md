@@ -6,6 +6,7 @@ A web application for ACME's HR Manager to maintain auditable salary data for ~1
 |---|---|
 | Live app | _coming soon_ |
 | Demo video | _coming soon_ |
+| API docs | Swagger UI at `/docs` on the deployed API |
 
 ## Stack
 

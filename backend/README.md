@@ -23,5 +23,7 @@ Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the
 |---|---|
 | `GET /health` | Liveness. No database access. |
 | `GET /health/ready` | Readiness. 200 if the database answers, 503 otherwise. |
+| `GET /docs` | Swagger UI: browse and try every endpoint. |
+| `GET /docs-json` | The OpenAPI document. |
 
 Work in progress.
