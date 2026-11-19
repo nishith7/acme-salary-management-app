@@ -122,3 +122,18 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
 - **Deployment catch flagged early:** the UI (Vercel) and API (Render) are different sites, so a cross-site cookie would silently fail in some browsers. The plan is a Vercel proxy for `/api/*`, to be verified at deploy time. It is recorded as an assumption, not a fact.
 - **Process:** columns shown and approved first. 7 integration tests were written and seen failing, Prisma generated the migration, the SQL was read and matched, then it was applied.
 - **Verified:** unit (12), e2e (8), integration (19), lint and build pass; the diagrams parse with the mermaid parser.
+
+### 15. Login endpoint and the Zod/Swagger decision (19 Nov 2026)
+
+- **Asked:** continue with the auth build order: packages, the Zod and Swagger check, then the endpoints.
+- **Packages:** installed with exact versions. `argon2` hashed and verified on the author's Windows machine. `npm audit` reported 5 issues, so the AI traced them instead of ignoring or "fixing" them: all come from `@nestjs/mau`, a dev-only tool from the Nest scaffold, and `npm audit --omit=dev` reports 0. `npm audit fix --force` was not run.
+- **Zod and Swagger, decided by evidence:** the AI read the installed Nest 12 and Swagger 12 code and found that Swagger asks a Standard Schema for its own JSON Schema, which Zod 4.6.7 provides. The login e2e tests, written first, then proved it: the OpenAPI document shows the request body (required fields, email format, password length) and the 200 response, all generated from the Zod schemas. class-validator is not needed.
+- **Pre-existing defect found:** the e2e tests only passed because the author's local `.env` supplied `DATABASE_URL` while `app.module.ts` was being imported; the config module validates at import time, before `createTestApp()` could set anything. They would have failed on a clean CI machine. Fixed at the root: placeholder values are set in `vitest.config.e2e.ts`, and a rule was added to `CLAUDE.md`.
+- **Decisions made by the AI, for the author to review:**
+  - argon2id at the OWASP minimum cost (19 MiB, 2 passes, 1 lane), not the library default (64 MiB, 4 lanes), so a few simultaneous logins cannot exhaust a small free-tier instance.
+  - For an unknown email the service still runs a full verification against a throwaway hash, so timing does not reveal which accounts exist. A unit test asserts the verification happens.
+  - Wrong password and unknown email return the same 401 message; the 400 error never echoes the submitted password (tested).
+  - The refresh token is only ever in the cookie, never in the response body (tested).
+- **Deferred on purpose:** the login rate limit. Behind Vercel and Render every request comes from a proxy, so a per-IP limit without a trusted-proxy setting would count everyone as one client and lock all users out. It will be built together with that setting.
+- **Process note:** the unit and e2e tests were written and seen failing before the code. The integration tests (real database, rolled back) were written after the implementation and passed on the first run, so they show the behaviour but were not seen failing.
+- **Verified:** unit (46), e2e (26), integration (25), lint, build and a full type-check including the test files pass. The compiled app was started against the real database: `/health` returned 200, login with an unknown email returned the generic 401, a bad body returned 400, and `/docs-json` shows the login operation. Prettier was run on the files touched; two older files (`health.service.ts`, `main.ts`) already failed `prettier --check` and were left alone.

@@ -18,7 +18,7 @@ NestJS 12 (ESM) + Prisma + PostgreSQL. See [../docs/tech-stack.md](../docs/tech-
 
 ## Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the API; `DIRECT_URL` is the direct URL used by Prisma migrations. The app refuses to start if `DATABASE_URL` is missing or not a Postgres URL.
+Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the API; `DIRECT_URL` is the direct URL used by Prisma migrations; `JWT_SECRET` signs access tokens (at least 32 characters, different in every environment). The app refuses to start if `DATABASE_URL` is missing or not a Postgres URL, or if `JWT_SECRET` is missing or too short.
 
 ## Endpoints
 
@@ -26,6 +26,7 @@ Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the
 |---|---|
 | `GET /health` | Liveness. No database access. |
 | `GET /health/ready` | Readiness. 200 if the database answers, 503 otherwise. |
+| `POST /auth/login` | Email and password in; a 15-minute access token in the body and a refresh token in an httpOnly cookie out. |
 | `GET /docs` | Swagger UI: browse and try every endpoint. |
 | `GET /docs-json` | The OpenAPI document. |
 

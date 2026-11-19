@@ -32,19 +32,21 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - TypeScript `strict`. No `any` unless unavoidable and commented.
 - ESM: relative imports end in `.js`; no `__dirname` (use `import.meta.dirname`).
 - Tests use Vitest: `vi.fn()`, never `jest.fn()`.
-- Layering: controller (HTTP, validation) → service (rules, authorisation, transactions) → repository (Prisma). Business rules that need no I/O are pure functions.
+- Layering: controller (HTTP, validation) → service (rules, authorisation, transactions) → repository (Prisma). Business rules that need no I/O are pure functions. Services never call Prisma directly. A repository holds queries only, no business rules; no generic `BaseRepository<T>`; add a method only when a service needs it (see `docs/tech-stack.md` decision 12).
 - **Money is `Decimal`, never `number` or float.** Salary history is append-only.
 - Aggregations (median, percentiles, totals) run in SQL, not in application code.
 - Insight endpoints must not return segments with fewer than 5 people.
 - Every endpoint is documented in Swagger: `@ApiTags`, `@ApiOperation`, `@ApiOkResponse` plus its error responses. Response bodies are DTO classes with `@ApiProperty`. The UI is served at `/docs`.
-- App-wide setup (Swagger now; pipes and prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
+- Request validation uses Zod. Declare the schema in `<feature>.schemas.ts` and apply it with `@Body({ schema })`; the global `StandardSchemaValidationPipe` validates it and Swagger documents the same schema. Describe responses with `@ApiOkResponse({ standardSchema })` (the health DTO classes with `@ApiProperty` stay as they are).
+- Never return a database row such as `User` from an endpoint. Map it to the response schema, so `passwordHash` and similar fields cannot leak.
+- App-wide setup (Swagger, the validation pipe; prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
 
 ## Testing rules
 
 - Write the test first for domain logic and services.
 - Unit tests are fast and deterministic: no network, no real database, no wall-clock or randomness (inject a clock, fix seeds).
 - Integration tests hit a real Postgres, and only for what mocks cannot prove (migrations, raw SQL, pagination). They run inside transactions that are always rolled back (`inRollback` in `test/support/test-db.ts`), so they leave no data behind.
-- e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client.
+- e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client. Their placeholder `DATABASE_URL` and `JWT_SECRET` are set in `vitest.config.e2e.ts`, because the environment is validated when `app.module.ts` is imported. e2e tests must pass on a machine with no `.env`.
 - Test names state behaviour, e.g. `returns tenure band 3-5 for 4 years of service`.
 
 ## Git rules

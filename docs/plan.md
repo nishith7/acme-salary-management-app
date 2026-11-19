@@ -16,7 +16,7 @@
 |---|---|---|---|
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
 | M1 | Data model foundations: `users`, `countries`, `departments` | all | done |
-| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress |
+| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress: `POST /auth/login` done; refresh, logout, `me`, guards, login rate limit, admin seed next |
 | M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | planned |
 | M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
@@ -47,7 +47,6 @@
 
 Decided when the first related code is written, then recorded in [tech-stack.md](tech-stack.md) or [performance.md](performance.md):
 
-- Request-validation library (Zod via Nest's Standard Schema support, or class-validator).
 - Current-salary derivation, pagination style, name-search indexing (see performance.md §3).
 - Where the auth token is stored in the browser.
 - Export formats: CSV only, or CSV plus XLSX.
