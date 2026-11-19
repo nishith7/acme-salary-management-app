@@ -9,21 +9,21 @@ import { Roles } from './roles.decorator.js';
 import { RolesGuard } from './roles.guard.js';
 
 class ProbeController {
-  anyone() {}
+  anyone(this: void) {}
 
   @Roles('HR_ADMIN')
-  hrOnly() {}
+  hrOnly(this: void) {}
 
   @Roles('HR_ADMIN', 'EMPLOYEE')
-  eitherRole() {}
+  eitherRole(this: void) {}
 }
 
 @Roles('HR_ADMIN')
 class HrController {
-  inherited() {}
+  inherited(this: void) {}
 
   @Roles('EMPLOYEE')
-  overridden() {}
+  overridden(this: void) {}
 }
 
 describe('RolesGuard', () => {

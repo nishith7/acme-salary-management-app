@@ -7,15 +7,15 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { Public } from './public.decorator.js';
 
 class ProbeController {
-  protectedRoute() {}
+  protectedRoute(this: void) {}
 
   @Public()
-  publicRoute() {}
+  publicRoute(this: void) {}
 }
 
 @Public()
 class OpenController {
-  anyRoute() {}
+  anyRoute(this: void) {}
 }
 
 describe('JwtAuthGuard', () => {
