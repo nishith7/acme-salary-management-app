@@ -37,3 +37,15 @@ model User {
 
   @@map("users")
 }
+
+/// Reference data loaded by the seed. One currency per country.
+model Country {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// ISO 3166-1 alpha-2, upper case (for example IN).
+  code         String @unique @db.Char(2)
+  name         String
+  /// ISO 4217, upper case (for example INR). Several countries may share one.
+  currencyCode String @map("currency_code") @db.Char(3)
+
+  @@map("countries")
+}
