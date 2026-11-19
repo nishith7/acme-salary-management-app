@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../../src/generated/prisma/client.js';
+import type { PrismaService } from '../../src/prisma/prisma.service.js';
 
 export type Tx = Prisma.TransactionClient;
 
@@ -11,6 +12,15 @@ export function createTestPrisma(): PrismaClient {
     throw new Error('DATABASE_URL is required to run integration tests');
   }
   return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+}
+
+/**
+ * Lets a repository, which is written against PrismaService, run on a
+ * transaction client instead. A transaction client has the same model methods
+ * (`user`, `refreshToken`, ...), which is all a repository uses.
+ */
+export function asPrismaService(tx: Tx): PrismaService {
+  return tx as unknown as PrismaService;
 }
 
 class Rollback extends Error {}

@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 export const SWAGGER_PATH = 'docs';
@@ -8,6 +8,9 @@ export const SWAGGER_PATH = 'docs';
  * exercise the same setup that runs in production.
  */
 export function configureApp(app: INestApplication): void {
+  // Validates any parameter declared with a schema, such as @Body({ schema }),
+  // and passes the handler the schema's output (for example a lower-cased email).
+  app.useGlobalPipes(new StandardSchemaValidationPipe());
   setupSwagger(app);
 }
 
