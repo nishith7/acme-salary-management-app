@@ -51,7 +51,7 @@ Generation is idempotent: a unique constraint on `(employee_id, period)` means r
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`, `countries`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
 
 ```mermaid
 erDiagram
@@ -64,6 +64,7 @@ erDiagram
   COUNTRY ||--o{ DEDUCTION_RATE : "configures"
   USER |o--o| EMPLOYEE : "optionally linked"
   USER ||--o{ SALARY_RECORD : "changed by"
+  USER ||--o{ REFRESH_TOKEN : "sessions"
 
   COUNTRY {
     uuid id PK
@@ -125,6 +126,15 @@ erDiagram
     string name
     string role "HR_ADMIN now, EMPLOYEE later"
   }
+  REFRESH_TOKEN {
+    uuid id PK
+    uuid user_id FK
+    uuid family_id "one per login, kept on rotation"
+    string token_hash UK "SHA-256 hex, never the token"
+    timestamp expires_at
+    timestamp revoked_at "null while active"
+    timestamp created_at
+  }
   FX_RATE {
     string currency_code PK
     date valid_from PK
@@ -138,3 +148,48 @@ Notes:
 - All money columns are `NUMERIC` (Prisma `Decimal`), never floating point.
 - `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible.
 - Terminated employees are kept (`status`), never deleted, so history and payouts stay intact.
+
+## 5. Authentication and refresh tokens
+
+```mermaid
+sequenceDiagram
+  actor HR as HR Manager (SPA)
+  participant API
+  participant DB
+  HR->>API: POST /auth/login {email, password}
+  API->>DB: find user, verify argon2id hash
+  API->>DB: insert refresh token (new family, hash only)
+  API-->>HR: 200 access token (15 min) + refresh cookie (httpOnly, path /auth)
+  Note over HR,API: The access token stays in memory and is sent as a Bearer header
+  HR->>API: POST /auth/refresh (cookie)
+  API->>DB: look up the token by its SHA-256 hash
+  alt token is active and not expired
+    API->>DB: revoke the old token, insert a new one in the same family
+    API-->>HR: 200 new access token + new refresh cookie
+  else a revoked token is presented again
+    API->>DB: revoke every token in the family
+    API-->>HR: 401, the user must log in again
+  end
+  HR->>API: POST /auth/logout
+  API->>DB: revoke the family
+  API-->>HR: 204 and the cookie is cleared
+```
+
+- **Access token:** a JWT valid for 15 minutes, carrying the user id and role. It is checked without a database call.
+- **Refresh token:** a random 256-bit value, not a JWT. Only its SHA-256 hash is stored, and it lasts 7 days. SHA-256 is enough here because the value is random and long, unlike a password.
+- **Secure by default:** a global JWT guard protects every route. Only login, refresh, `/health*` and `/docs*` are marked `@Public()`. `@Roles('HR_ADMIN')` handles role checks.
+
+| Threat | Mitigation |
+|---|---|
+| Database leaked | Only token hashes are stored. Passwords are argon2id hashes. |
+| XSS steals a token | The access token lives in memory and the refresh token is an httpOnly cookie, so scripts cannot read it. |
+| Refresh token stolen and replayed | Rotation makes each token single-use. A replay revokes the whole family. |
+| CSRF on refresh | SameSite cookie, path `/auth`, POST only. |
+| Password guessing | Rate limit on login, one generic error message, and a dummy hash when the email is unknown so timing does not reveal accounts. |
+
+Trade-offs, accepted on purpose:
+
+- **An access token cannot be revoked early.** A role change or deactivation takes effect within 15 minutes. A denylist would add a database read to every request.
+- **Sliding 7-day expiry, no absolute session cap in v1.** Simpler; revisit if the requirements need a maximum session length.
+- **Parallel refreshes can look like reuse.** Two tabs refreshing with the same token would trip reuse detection. The UI will refresh through a single in-flight request instead of adding a grace window to the API.
+- **Cross-site cookies.** Vercel and Render are different sites, and some browsers block cross-site cookies. The plan is for Vercel to proxy `/api/*` to Render so the browser sees one origin. To be verified at deploy time (M9).

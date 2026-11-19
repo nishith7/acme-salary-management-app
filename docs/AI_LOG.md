@@ -107,3 +107,18 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
 - **Decision:** the author dropped the table. Dropping a table the project never created was the author's call, not the AI's.
 - **Outcome:** Prisma generated the migration, the SQL matched the reviewed design, it was applied, and the tests passed. Unit (12), e2e (8), integration (9), lint and build pass; the tests left no rows behind.
 - **Rule added:** `CLAUDE.md` now says never to accept a `migrate reset` offer on this database, and to stop and ask.
+
+### 13. The `departments` table (19 Nov 2026)
+
+- **Process:** the same loop with no surprises: columns shown and approved (uuid id, `name` text unique, no timestamps), 3 integration tests written first and seen failing, Prisma generated the migration with `--create-only`, the SQL was read and matched the design, then it was applied. With the stray table gone there was no drift.
+- **Verified:** unit (12), e2e (8), integration (12), lint and build pass. The database now holds `users`, `countries`, `departments` and Prisma's own ledger table, and 3 applied migrations.
+
+### 14. Auth design and the `refresh_tokens` table (19 Nov 2026)
+
+- **Asked:** start the auth module with a refresh-token strategy, "whichever is best practice".
+- **Sequencing:** the author asked whether to build login or finish the whole schema first. The AI recommended login first, because `users` already exists, the remaining tables serve features that are not built yet, and a global guard is cheaper to add before the other endpoints exist. It named the cost: the risky parts (10k rows, percentile insights) wait one step longer. `plan.md` was reordered to match.
+- **Checked before recommending:** rather than rely on memory, the AI read the installed packages. Nest 12 ships a `StandardSchemaValidationPipe`, and `@nestjs/swagger` 12 can document Standard Schema (Zod) parameters. `@nestjs/jwt` 12 and `@nestjs/throttler` support Nest 12. The Zod choice is therefore provisional until a failing-first Swagger test proves it, and class-validator is the stated fallback.
+- **Design:** 15-minute access JWT; opaque 7-day refresh token stored as a SHA-256 hash, rotated on use, with family revocation on reuse; httpOnly cookie delivery. It was proposed with its costs (no early revocation of an access token, parallel refreshes look like reuse, no absolute session cap) and recorded in [architecture.md](architecture.md) section 5 with a threat table and a sequence diagram.
+- **Deployment catch flagged early:** the UI (Vercel) and API (Render) are different sites, so a cross-site cookie would silently fail in some browsers. The plan is a Vercel proxy for `/api/*`, to be verified at deploy time. It is recorded as an assumption, not a fact.
+- **Process:** columns shown and approved first. 7 integration tests were written and seen failing, Prisma generated the migration, the SQL was read and matched, then it was applied.
+- **Verified:** unit (12), e2e (8), integration (19), lint and build pass; the diagrams parse with the mermaid parser.

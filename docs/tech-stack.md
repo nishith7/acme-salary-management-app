@@ -7,9 +7,9 @@
 | Layer | Choice |
 |---|---|
 | Language | TypeScript (strict) in both packages |
-| API | NestJS 12 (ESM), REST, Swagger/OpenAPI; request-validation library chosen with the first endpoint |
+| API | NestJS 12 (ESM), REST, Swagger/OpenAPI; request validation with Zod through Nest's `StandardSchemaValidationPipe` (confirmed by a Swagger test with the first endpoint; class-validator is the fallback) |
 | Database | PostgreSQL 16 with Prisma (migrations + typed client) |
-| Auth | JWT, `HR_ADMIN` role guard, ownership checks in the service layer |
+| Auth | Short-lived JWT access token + rotating opaque refresh token (httpOnly cookie), argon2id passwords, global guard with `@Public()` opt-outs, `HR_ADMIN` role guard, ownership checks in the service layer |
 | UI | React + Vite, shadcn/ui + Tailwind, TanStack Table + Query, Recharts |
 | Tests | Vitest in both packages: + Supertest for the API, + Testing Library for the UI |
 | Quality | oxlint (Nest 12 default) for the API, ESLint for the UI, Prettier, Husky + lint-staged, commitlint, GitHub Actions |
@@ -26,6 +26,8 @@
 7. **One repo, two independent packages** (`backend/`, `frontend/`, no npm workspaces). One link to submit and one commit history covering API and UI together. Each folder deploys on its own via the host's root-directory setting.
 8. **Test strategy.** Many fast unit tests (pure domain logic, services with mocked repositories); a few integration tests against real Postgres for migrations, raw SQL and pagination; component tests for the UI. Domain logic is written test-first. CI runs everything on each push using a Postgres service container.
 9. **Performance is measured, not assumed.** Targets are < 500 ms for the directory and < 1 s for insights at 10k employees. They will be checked against the 10k seed with `EXPLAIN`, and indexes added only where the plan shows a need.
+10. **Access JWT plus rotating refresh token.** A 15-minute JWT is checked without touching the database. A 7-day opaque refresh token is stored only as a SHA-256 hash, rotated on every use, and a replayed token revokes its whole family. It travels in an httpOnly cookie so scripts cannot read it. *Cost:* an access token cannot be revoked before it expires, and a cookie needs the UI and API to share an origin (see [architecture.md](architecture.md) section 5). A plain long-lived JWT would be simpler, but one leaked token would be valid for days with no way to cut it off.
+11. **argon2id for passwords.** OWASP's first choice, and it resists GPU cracking better than bcrypt. *Cost:* a native module, so the Render build must be checked.
 
 ## Deliberately not chosen
 

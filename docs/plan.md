@@ -5,6 +5,7 @@
 ## 1. Approach
 
 - **Vertical slices, test-first.** Each slice is a small, working piece of behaviour (data model, then API, then UI) with fast deterministic tests, committed on its own.
+- **Tables arrive with the feature that needs them,** one table at a time, each reviewed and migrated on its own. The remaining tables (`fx_rates`, `deduction_rates`, `payouts`, `payout_deductions`) are designed next to the insight and payout queries that use them, not guessed at up front.
 - **Backend first, then frontend, then deploy.** The API and data model are the riskiest part, so they are built and tested before the UI depends on them.
 - **Must before anything else.** F1–F7 are the product. F8–F11 (Should and Could) are built only if time remains; they are cut first.
 - **Definition of done for a slice:** lint, unit tests and build pass; docs touched if a decision changed; a short entry added to [AI_LOG.md](AI_LOG.md) when AI made a notable contribution or needed correction; committed with a Conventional Commit message.
@@ -14,10 +15,10 @@
 | # | Milestone | Covers | Status |
 |---|---|---|---|
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
-| M1 | Data model, migration and the 10,000-employee seed (realistic pay by country, level, department) | all | in progress: `users`, `countries` done; other tables added one at a time |
-| M2 | Auth: JWT login, `HR_ADMIN` role guard | §3 | planned |
-| M3 | Employee directory with search, filters, pagination (backend) | F1, F2 | planned |
-| M4 | Employee profile and salary changes, bands, add/edit/terminate | F3, F4 | planned |
+| M1 | Data model foundations: `users`, `countries`, `departments` | all | done |
+| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress |
+| M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | planned |
+| M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
 | M6 | Monthly pay status and CSV export | F6, F7 | planned |
 | M7 | CI pipeline and quality tooling (Husky, lint-staged, commitlint, GitHub Actions) | quality | planned |
