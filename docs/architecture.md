@@ -177,6 +177,8 @@ sequenceDiagram
 
 - **Access token:** a JWT valid for 15 minutes, carrying the user id and role. It is checked without a database call.
 - **Refresh token:** a random 256-bit value, not a JWT. Only its SHA-256 hash is stored, and it lasts 7 days. SHA-256 is enough here because the value is random and long, unlike a password.
+- **Rotation is one atomic step.** Retiring the old token and storing the new one happen in a single transaction (`RefreshTokensRepository.rotate`). The old token is retired with a conditional update (`WHERE revoked_at IS NULL`), so when two requests present the same token the database lets exactly one through. The loser is treated as a replay. If the transaction cannot start, nothing was consumed and the user keeps a valid token.
+- **A refused refresh clears the cookie.** Every 401 from `/auth/refresh` also expires the cookie, so the browser stops sending a token that can no longer work. The error message is the same for a missing, unknown, expired or replayed token.
 - **Secure by default:** a global JWT guard protects every route. Only login, refresh, `/health*` and `/docs*` are marked `@Public()`. `@Roles('HR_ADMIN')` handles role checks.
 
 | Threat | Mitigation |
@@ -191,8 +193,8 @@ Trade-offs, accepted on purpose:
 
 - **An access token cannot be revoked early.** A role change or deactivation takes effect within 15 minutes. A denylist would add a database read to every request.
 - **Sliding 7-day expiry, no absolute session cap in v1.** Simpler; revisit if the requirements need a maximum session length.
-- **Parallel refreshes can look like reuse.** Two tabs refreshing with the same token would trip reuse detection. The UI will refresh through a single in-flight request instead of adding a grace window to the API.
+- **Parallel refreshes can look like reuse.** Two tabs refreshing with the same token would trip reuse detection. Checked against the real database with two simultaneous requests: one succeeded, the other got a 401 and revoked the family, so the winner's new token was revoked too and its next refresh will fail. The UI will therefore refresh through a single in-flight request instead of adding a grace window to the API.
 - **Cross-site cookies.** Vercel and Render are different sites, and some browsers block cross-site cookies. The plan is for Vercel to proxy `/api/*` to Render so the browser sees one origin. To be verified at deploy time (M9). A proxy that adds a path prefix would also change the cookie path (`REFRESH_COOKIE_PATH` in `refresh-cookie.ts`), which is why that value lives in one place.
 - **Login rate limit needs the real client address.** Behind Vercel and Render, every request arrives from a proxy. Unless the app trusts the proxy header, a per-IP limit would count all users as one and lock everyone out after a few attempts. The limit and the trusted-proxy setting are built and tested together.
 
-**Implemented so far:** `POST /auth/login` (env-validated signing secret, argon2id at the OWASP minimum cost of 19 MiB, a dummy verification for unknown emails, one error message for every failure). Emails are lower-cased by the request schema, so the database lookup is a plain exact match; the seed must store emails in lower case too. Refresh, logout, `me`, the guards and the rate limit are next.
+**Implemented so far:** `POST /auth/login` (env-validated signing secret, argon2id at the OWASP minimum cost of 19 MiB, a dummy verification for unknown emails, one error message for every failure). Emails are lower-cased by the request schema, so the database lookup is a plain exact match; the seed must store emails in lower case too. `POST /auth/refresh` is built too: it reads the cookie (`cookie-parser`), rotates the token, revokes the family on reuse, and re-reads the user so a changed role reaches the next access token. Logout, `me`, the guards and the rate limit are next.

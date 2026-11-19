@@ -27,6 +27,7 @@ Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the
 | `GET /health` | Liveness. No database access. |
 | `GET /health/ready` | Readiness. 200 if the database answers, 503 otherwise. |
 | `POST /auth/login` | Email and password in; a 15-minute access token in the body and a refresh token in an httpOnly cookie out. |
+| `POST /auth/refresh` | No body; reads the refresh cookie. Returns a new access token (same shape as login) and replaces the cookie. A token works once; presenting a used one ends that whole login session. |
 | `GET /docs` | Swagger UI: browse and try every endpoint. |
 | `GET /docs-json` | The OpenAPI document. |
 

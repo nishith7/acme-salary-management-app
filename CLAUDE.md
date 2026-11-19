@@ -32,14 +32,14 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - TypeScript `strict`. No `any` unless unavoidable and commented.
 - ESM: relative imports end in `.js`; no `__dirname` (use `import.meta.dirname`).
 - Tests use Vitest: `vi.fn()`, never `jest.fn()`.
-- Layering: controller (HTTP, validation) → service (rules, authorisation, transactions) → repository (Prisma). Business rules that need no I/O are pure functions. Services never call Prisma directly. A repository holds queries only, no business rules; no generic `BaseRepository<T>`; add a method only when a service needs it (see `docs/tech-stack.md` decision 12).
+- Layering: controller (HTTP, validation) → service (rules, authorisation, transactions) → repository (Prisma). Business rules that need no I/O are pure functions. Services never call Prisma directly. A repository holds queries only, no business rules; no generic `BaseRepository<T>`; add a method only when a service needs it (see `docs/tech-stack.md` decision 12). A step that must be atomic is one repository method that owns the transaction (e.g. `RefreshTokensRepository.rotate`); the service decides what its result means.
 - **Money is `Decimal`, never `number` or float.** Salary history is append-only.
 - Aggregations (median, percentiles, totals) run in SQL, not in application code.
 - Insight endpoints must not return segments with fewer than 5 people.
 - Every endpoint is documented in Swagger: `@ApiTags`, `@ApiOperation`, `@ApiOkResponse` plus its error responses. Response bodies are DTO classes with `@ApiProperty`. The UI is served at `/docs`.
 - Request validation uses Zod. Declare the schema in `<feature>.schemas.ts` and apply it with `@Body({ schema })`; the global `StandardSchemaValidationPipe` validates it and Swagger documents the same schema. Describe responses with `@ApiOkResponse({ standardSchema })` (the health DTO classes with `@ApiProperty` stay as they are).
 - Never return a database row such as `User` from an endpoint. Map it to the response schema, so `passwordHash` and similar fields cannot leak.
-- App-wide setup (Swagger, the validation pipe; prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
+- App-wide setup (cookie parser, the validation pipe, Swagger; prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
 
 ## Testing rules
 
