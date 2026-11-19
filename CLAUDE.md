@@ -61,6 +61,7 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - Prisma CLI, client and adapter are pinned to exactly **7.10.1**. npm's `latest` tag is a release candidate; always pin.
 - Do not run `npx prisma init` again: it injects unrequested third-party files.
 - **Schema work is one table at a time.** Edit `schema.prisma`, show the columns for review, write the integration test first, generate the SQL with `npm run prisma:migrate -- --create-only --name <name>`, review it, then apply with `npm run prisma:deploy`. Never hand-write migration SQL without asking.
+- The database must contain only tables Prisma manages. A stray table (for example Neon's `playing_with_neon` sample) makes `migrate dev` report drift and offer `migrate reset`. Never accept a reset: it wipes the schema. Stop and ask the user instead.
 - Run Prisma only from `backend/` or through the npm scripts. `npx prisma` anywhere else downloads the 8.0 release candidate, which has a different workflow ("contracts").
 - Prisma's docs now default to the 8 release candidate. Use the version 7 docs: https://www.prisma.io/docs/llms/orm-v7.txt
 - The Prisma client is generated into `src/generated/prisma` (gitignored) by `postinstall`. Run `npm run prisma:generate` after editing `schema.prisma`.

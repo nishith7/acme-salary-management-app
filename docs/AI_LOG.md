@@ -99,3 +99,11 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
 - **Wrong-directory incident:** `npx prisma` run from the repo root, outside `backend/`, downloaded the 8.0 release candidate instead of the pinned CLI. Nothing was changed. The rule to run Prisma from `backend/` is now in `CLAUDE.md`.
 - **Observation:** after the migration, a `playing_with_neon` table appeared in the database. This project did not create it (the name matches Neon's console sample table), so it was left alone.
 - **Verified:** 4 integration tests pass in rolled-back transactions; unit (12), e2e (8), lint and build still pass.
+
+### 12. The `countries` table, and a drift stop (19 Nov 2026)
+
+- **Process:** the AI showed the proposed columns first (UUID id, `code` char(2) unique, `name`, `currency_code` char(3); no timestamps because it is seed-managed reference data) and listed four decisions. The author approved, then the AI wrote 5 integration tests and watched all 5 fail before adding the model.
+- **Stop:** `prisma migrate dev --create-only` reported drift, caused by the `playing_with_neon` table noted in entry 11, and offered to reset the `public` schema. The AI did not accept the reset. It confirmed the database was unchanged, read the table read-only (3 columns, 10 rows), and gave the author two options: drop the table, or declare it external in `prisma.config.ts` (a Preview feature, per the version 7 docs). It recommended dropping it and did not drop it itself, because the table was not created by this project.
+- **Decision:** the author dropped the table. Dropping a table the project never created was the author's call, not the AI's.
+- **Outcome:** Prisma generated the migration, the SQL matched the reviewed design, it was applied, and the tests passed. Unit (12), e2e (8), integration (9), lint and build pass; the tests left no rows behind.
+- **Rule added:** `CLAUDE.md` now says never to accept a `migrate reset` offer on this database, and to stop and ask.

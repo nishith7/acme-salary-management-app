@@ -51,7 +51,7 @@ Generation is idempotent: a unique constraint on `(employee_id, period)` means r
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented so far:** `users`, `countries`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
 
 ```mermaid
 erDiagram
@@ -67,8 +67,9 @@ erDiagram
 
   COUNTRY {
     uuid id PK
-    string code UK
-    string currency_code
+    string code UK "ISO 3166-1 alpha-2, char(2)"
+    string name
+    string currency_code "ISO 4217, char(3)"
   }
   DEPARTMENT {
     uuid id PK

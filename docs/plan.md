@@ -14,7 +14,7 @@
 | # | Milestone | Covers | Status |
 |---|---|---|---|
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
-| M1 | Data model, migration and the 10,000-employee seed (realistic pay by country, level, department) | all | in progress: `users` done; other tables added one at a time |
+| M1 | Data model, migration and the 10,000-employee seed (realistic pay by country, level, department) | all | in progress: `users`, `countries` done; other tables added one at a time |
 | M2 | Auth: JWT login, `HR_ADMIN` role guard | §3 | planned |
 | M3 | Employee directory with search, filters, pagination (backend) | F1, F2 | planned |
 | M4 | Employee profile and salary changes, bands, add/edit/terminate | F3, F4 | planned |
