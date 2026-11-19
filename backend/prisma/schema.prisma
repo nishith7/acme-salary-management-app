@@ -100,8 +100,8 @@ model Department {
   @@map("departments")
 }
 
-/// A person on the payroll. Leavers are marked TERMINATED and kept, never deleted,
-/// so their salary history and payouts stay intact; that is why the two relations
+/// A person ACME employs, or has employed. Leavers are marked TERMINATED and kept,
+/// never deleted, so their salary history stays intact; that is why the two relations
 /// below restrict deletes.
 ///
 /// There are no secondary indexes yet, on purpose: they are added after the

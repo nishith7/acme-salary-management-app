@@ -1,13 +1,13 @@
 # Delivery Plan & Design Notes
 
-**Status:** living document, updated as slices land. Priorities (Must / Should / Could) and feature numbers (F1–F11) come from [requirements.md](requirements.md).
+**Status:** living document, updated as slices land. Priorities (Must / Should / Could) and feature numbers (F1–F9) come from [requirements.md](requirements.md).
 
 ## 1. Approach
 
 - **Vertical slices, test-first.** Each slice is a small, working piece of behaviour (data model, then API, then UI) with fast deterministic tests, committed on its own.
-- **Tables arrive with the feature that needs them,** one table at a time, each reviewed and migrated on its own. The remaining tables (`fx_rates`, `deduction_rates`, `payouts`, `payout_deductions`) are designed next to the insight and payout queries that use them, not guessed at up front.
+- **Tables arrive with the feature that needs them,** one table at a time, each reviewed and migrated on its own. The remaining tables (`salary_records`, `imports`, `salary_bands`, `fx_rates`) are designed next to the features and queries that use them, not guessed at up front.
 - **Backend first, then frontend, then deploy.** The API and data model are the riskiest part, so they are built and tested before the UI depends on them.
-- **Must before anything else.** F1–F7 are the product. F8–F11 (Should and Could) are built only if time remains; they are cut first.
+- **Must before anything else.** F1–F7 are the product. F8 and F9 (Should) are built only if time remains; they are cut first.
 - **Definition of done for a slice:** lint, unit tests and build pass; docs touched if a decision changed; a short entry added to [AI_LOG.md](AI_LOG.md) when AI made a notable contribution or needed correction; committed with a Conventional Commit message.
 
 ## 2. Milestones
@@ -20,15 +20,16 @@
 | M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | in progress: `employees` table and the 10,000-employee seed (`npm run seed`) done; `salary_records` next (columns reviewed first), then salary history in the seed and the directory |
 | M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
-| M6 | Monthly pay status and CSV export | F6, F7 | planned |
+| M6 | Import from Excel/CSV (template, validation preview, repeatable commit, an `imports` table so every change traces to its upload), export, bulk salary change | F6, F7, F8 | planned |
 | M7 | CI pipeline and quality tooling (Husky, lint-staged, commitlint, GitHub Actions) | quality | planned |
-| M8 | Frontend: directory, profile, insights, pay status | F1–F7 UI | planned |
+| M8 | Frontend: directory, profile, insights, import | F1–F8 UI | planned |
 | M9 | Deploy (Neon, Render, Vercel), demo video, README polish. Deploy checklist: set `JWT_SECRET`, set `TRUST_PROXY` and verify it with the two-network check in `backend/README.md`, confirm the Vercel `/api/*` proxy keeps the refresh cookie first-party | readiness | planned |
-| M10 | Stretch, if time: payslip PDF, increment tracking, CSV import, raise planner | F8–F11 | cut first |
+| M10 | Stretch, if time: increment tracking. F8 (bulk salary change) is the first thing cut from M6 | F9 | cut first |
 
 ## 3. Design notes
 
-- **System of record, not payroll.** Salary changes append effective-dated history; nothing is overwritten. See [architecture.md](architecture.md) for the data model.
+- **System of record, not payroll.** Salary changes append effective-dated history; nothing is overwritten. See [architecture.md](architecture.md) for the data model. Paying people (payroll execution, pay status, payslips) is deliberately out of scope: see [requirements.md](requirements.md) §4 for the reasoning.
+- **The spreadsheet is the front door.** The HR Manager's data starts in Excel, so import (F6) is a core feature, not a convenience: it loads the 10,000 employees, it is repeatable, and every change it makes traces back to its upload. The seed also writes the same people as an Excel file, which stands in for ACME's real spreadsheet and is what the demo uploads.
 - **Privacy by default.** Insight endpoints return no segment with fewer than 5 people, so an individual cannot be inferred.
 - **Realistic seed data.** Insights are only meaningful if the seed is: salaries are generated per country and level with a spread, some employees sit outside their band, both genders are represented, and the seed is deterministic (fixed random seed) so runs are reproducible. The employee half is built: 10,000 people from faker (pinned), shaped like a multinational: 15 countries with a few big offices, engineering as the largest department, a pyramid of seven levels, about 6% who have left, fewer women in engineering and at senior levels so the gender insight has something to find, and a handful of small country and level groups under the privacy threshold so that rule is visible. Salary history comes with `salary_records`.
 - **Authorisation in services.** Ownership checks sit in the service layer from day one, so the later `EMPLOYEE` role is additive.
@@ -37,7 +38,7 @@
 
 | Risk | Mitigation |
 |---|---|
-| Scope too large for the time available | Must-first order above; F8–F11 are explicitly cut first |
+| Scope too large for the time available | Must-first order above; F8 and F9 are explicitly cut first |
 | Free-tier cold starts hurt the demo | Warm the API and database before recording; documented in the README |
 | Insights look meaningless on random data | Structured, deterministic seed (see section 3) |
 | Percentile SQL is less type-safe through Prisma | One repository class for raw SQL, covered by integration tests against real Postgres |
@@ -49,4 +50,4 @@ Decided when the first related code is written, then recorded in [tech-stack.md]
 
 - Current-salary derivation, pagination style, name-search indexing (see performance.md §3).
 - Where the auth token is stored in the browser.
-- Export formats: CSV only, or CSV plus XLSX.
+- Import and export formats: `.xlsx` and `.csv` for import, CSV (and possibly XLSX) for export. Which Excel library to use is decided when M6 starts, with the package's maintenance and security record in mind.

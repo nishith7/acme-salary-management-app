@@ -4,7 +4,7 @@ Instructions for AI coding tools working in this repo. Read [docs/requirements.m
 
 ## Project
 
-ACME Salary Management: web app for an HR Manager to maintain auditable salary data for ~10,000 employees, track monthly pay status, and answer pay questions.
+ACME Salary Management: web app for an HR Manager to maintain auditable salary data for ~10,000 employees (loaded from the existing spreadsheets, then kept up to date in the app) and answer pay questions. It is a system of record, not payroll: no payouts, pay status or payslips (see requirements §4).
 
 - `backend/` NestJS 12 (ESM) + Prisma 7 + PostgreSQL (Neon)
 - `frontend/` React + Vite (not created yet)

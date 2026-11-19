@@ -27,27 +27,37 @@ flowchart TB
   R --> P[(PostgreSQL)]
 ```
 
-Planned Nest modules: `auth`, `employees`, `salaries` (history and bands), `payouts`, `insights`, `export`. Each follows the same controller → service → repository shape.
+Planned Nest modules: `auth`, `employees`, `salaries` (history and bands), `imports`, `insights`, `export`. Each follows the same controller → service → repository shape.
 
 Why this shape: domain rules are pure functions, so most unit tests need no database and run in milliseconds. Authorisation lives in services, so adding an `EMPLOYEE` role later means new guards and screens, not a redesign (requirements §3). Why repositories exist, what they cost, and the rules that keep them thin are in [tech-stack.md](tech-stack.md) decision 12.
 
-## 3. Monthly payout flow (F6)
+## 3. Import flow (F6)
+
+The HR Manager's data starts in Excel, so import is the front door (see [requirements.md](requirements.md) §3). This flow is designed, not built yet.
 
 ```mermaid
 sequenceDiagram
   actor HR as HR Manager
   participant API
   participant DB
-  HR->>API: POST /payouts/generate {month}
-  API->>DB: insert one payout per active employee<br/>ON CONFLICT (employee_id, period) DO NOTHING
-  DB-->>API: rows created
-  API-->>HR: 201 {created, skipped}
-  HR->>API: POST /payouts/mark-paid {ids or filter}
-  API->>DB: UPDATE status = PAID, paid_at = now() (one transaction)
-  API-->>HR: 200 {updated}
+  HR->>API: POST /imports (an .xlsx or .csv file)
+  API->>API: read the rows, validate each one,<br/>match employees by employee code
+  API->>DB: save the result as a draft import
+  API-->>HR: 201 preview (created, changed, unchanged, errors per row)
+  alt the preview has errors
+    HR->>API: fix the file and upload it again
+  else the preview is clean
+    HR->>API: POST /imports/{id}/commit
+    API->>DB: one transaction: add or update employees,<br/>append salary records only where the amount differs,<br/>mark the import applied
+    API-->>HR: 200 (created, changed, unchanged)
+  end
 ```
 
-Generation is idempotent: a unique constraint on `(employee_id, period)` means re-running it for the same month cannot create duplicates.
+- **What was previewed is what is applied.** The draft keeps the parsed rows, and the commit applies those, not a fresh read of the file.
+- **Repeatable.** Employees are matched by `employee_code`, and a salary record is appended only when the amount differs from the current one, so uploading the same file twice changes nothing.
+- **Omission is not termination.** People missing from a new file are left as they are; ending someone's employment is an explicit change.
+- **Traceable.** Every salary record an import creates points back to that import, so a bad upload can be found and corrected. Corrections are new records, never deletions.
+- **All or nothing.** The commit is one transaction, so a failure part-way leaves no half-applied upload.
 
 ## 4. Data model (proposed)
 
@@ -58,12 +68,11 @@ erDiagram
   COUNTRY ||--o{ EMPLOYEE : "based in"
   DEPARTMENT ||--o{ EMPLOYEE : "belongs to"
   EMPLOYEE ||--o{ SALARY_RECORD : "salary history"
-  EMPLOYEE ||--o{ PAYOUT : "monthly payout"
-  PAYOUT ||--o{ PAYOUT_DEDUCTION : "line items"
   COUNTRY ||--o{ SALARY_BAND : "defines"
-  COUNTRY ||--o{ DEDUCTION_RATE : "configures"
   USER |o--o| EMPLOYEE : "optionally linked"
-  USER ||--o{ SALARY_RECORD : "changed by"
+  USER |o--o{ SALARY_RECORD : "changed by"
+  USER ||--o{ IMPORT : "uploads"
+  IMPORT |o--o{ SALARY_RECORD : "created"
   USER ||--o{ REFRESH_TOKEN : "sessions"
 
   COUNTRY {
@@ -89,35 +98,33 @@ erDiagram
   }
   SALARY_RECORD {
     uuid id PK
-    decimal amount "local currency"
+    uuid employee_id FK
+    decimal annual_amount "annual gross, in currency_code"
+    string currency_code "ISO 4217, char(3)"
     date effective_from
-    string reason "PROMOTION, MERIT, MARKET_ADJUSTMENT, CORRECTION"
-    uuid changed_by FK
+    string reason "HIRE, PROMOTION, MERIT, MARKET_ADJUSTMENT or CORRECTION; null when an import gives none"
+    uuid changed_by FK "null when loaded by the seed"
+    uuid import_id FK "null unless an import created it"
     timestamp created_at
   }
   SALARY_BAND {
     uuid id PK
-    string level
+    uuid country_id FK
+    int level
     decimal min_amount
     decimal max_amount
   }
-  PAYOUT {
+  IMPORT {
     uuid id PK
-    date period "UK with employee_id"
-    decimal gross
-    decimal net
-    string status "PENDING, PAID, FAILED"
-    timestamp paid_at
-  }
-  PAYOUT_DEDUCTION {
-    uuid id PK
-    string label
-    decimal amount
-  }
-  DEDUCTION_RATE {
-    uuid id PK
-    string label
-    decimal rate
+    string file_name
+    uuid uploaded_by FK
+    string status "DRAFT, APPLIED or DISCARDED"
+    int rows_created
+    int rows_changed
+    int rows_unchanged
+    int rows_with_errors
+    timestamp created_at
+    timestamp applied_at "null until committed"
   }
   USER {
     uuid id PK
@@ -144,10 +151,11 @@ erDiagram
 
 Notes:
 
-- `SALARY_RECORD` is append-only. The current salary is the latest record with `effective_from <= today`. This is what makes every change auditable and growth computable (F3, F9).
+- `SALARY_RECORD` is append-only. The current salary is the latest record with `effective_from <= today`, with ties going to the newest `created_at`, so a correction can share the date of the record it fixes. This is what makes every change auditable and growth computable (F3, F9). An import appends a record only when the amount differs from the current one (F6). The columns shown here are the current proposal, not yet reviewed or built.
+- `IMPORT` is what makes uploads traceable: each import records who uploaded it, its outcome counts and whether it was applied, and the salary records it created point back to it. Its exact columns are settled when the table is designed.
 - All money columns are `NUMERIC` (Prisma `Decimal`), never floating point.
 - `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible.
-- Terminated employees are kept (`status`), never deleted, so history and payouts stay intact. The foreign keys to `countries` and `departments` are `ON DELETE RESTRICT`, so a country or department with employees cannot be deleted either.
+- Terminated employees are kept (`status`), never deleted, so their salary history stays intact. The foreign keys to `countries` and `departments` are `ON DELETE RESTRICT`, so a country or department with employees cannot be deleted either.
 - `employees` has no secondary indexes yet, on purpose. They are added after the 10,000-employee seed, only where `EXPLAIN` shows a need, and the before and after are recorded in [performance.md](performance.md). Only the unique `employee_code` is indexed, because uniqueness needs it.
 - `status` and `terminated_on` belong together (`TERMINATED` has a date, `ACTIVE` does not). The database does not enforce it, because Prisma cannot express that check without hand-written SQL; the service's single terminate operation sets both, and a `CHECK` can be added if that proves not to be enough.
 - `level` is an integer so it sorts correctly (text would put 10 before 2). Its range is validated by the API, not the database. `job_title` is free text for now.
