@@ -29,7 +29,8 @@ Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the
 | `POST /auth/login` | Email and password in; a 15-minute access token in the body and a refresh token in an httpOnly cookie out. |
 | `POST /auth/refresh` | No body; reads the refresh cookie. Returns a new access token (same shape as login) and replaces the cookie. A token works once; presenting a used one ends that whole login session. |
 | `POST /auth/logout` | No body; reads the refresh cookie. Ends that login session, clears the cookie and returns 204. Needs no access token and never fails. |
-| `GET /docs` | Swagger UI: browse and try every endpoint. |
+| `GET /auth/me` | The logged-in user, read from the database. Needs `Authorization: Bearer <access token>`; every route except login, refresh, logout, `/health*` and `/docs*` does. |
+| `GET /docs` | Swagger UI: browse and try every endpoint. Use "Authorize" and paste the access token from login to call protected routes. |
 | `GET /docs-json` | The OpenAPI document. |
 
 Work in progress.

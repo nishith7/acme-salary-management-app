@@ -39,6 +39,7 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - Every endpoint is documented in Swagger: `@ApiTags`, `@ApiOperation`, `@ApiOkResponse` plus its error responses. Response bodies are DTO classes with `@ApiProperty`. The UI is served at `/docs`.
 - Request validation uses Zod. Declare the schema in `<feature>.schemas.ts` and apply it with `@Body({ schema })`; the global `StandardSchemaValidationPipe` validates it and Swagger documents the same schema. Describe responses with `@ApiOkResponse({ standardSchema })` (the health DTO classes with `@ApiProperty` stay as they are).
 - Never return a database row such as `User` from an endpoint. Map it to the response schema, so `passwordHash` and similar fields cannot leak.
+- Every route needs a valid access token by default (global `JwtAuthGuard`). Opt out only with `@Public()`, with a comment saying why. A route without `@Roles` is open to any signed-in user, so **every HR controller carries `@Roles('HR_ADMIN')` at class level**, and its e2e tests must show an `EMPLOYEE` token gets 403. Add `@ApiBearerAuth()` and `@ApiUnauthorizedResponse` to protected controllers so Swagger sends the token. Take the user from `@CurrentUser()`, never from the request body or URL.
 - App-wide setup (cookie parser, the validation pipe, Swagger; prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
 
 ## Testing rules
@@ -46,7 +47,7 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 - Write the test first for domain logic and services.
 - Unit tests are fast and deterministic: no network, no real database, no wall-clock or randomness (inject a clock, fix seeds).
 - Integration tests hit a real Postgres, and only for what mocks cannot prove (migrations, raw SQL, pagination). They run inside transactions that are always rolled back (`inRollback` in `test/support/test-db.ts`), so they leave no data behind.
-- e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client. Their placeholder `DATABASE_URL` and `JWT_SECRET` are set in `vitest.config.e2e.ts`, because the environment is validated when `app.module.ts` is imported. e2e tests must pass on a machine with no `.env`.
+- e2e tests boot the real `AppModule` through `createTestApp()` in `test/support/test-app.ts`, which fakes only the database client. Their placeholder `DATABASE_URL` and `JWT_SECRET` are set in `vitest.config.e2e.ts`, because the environment is validated when `app.module.ts` is imported. e2e tests must pass on a machine with no `.env`. `createTestApp({ controllers })` adds test-only controllers (for example a route restricted to one role) next to the real ones; the global guards apply to them too.
 - Test names state behaviour, e.g. `returns tenure band 3-5 for 4 years of service`.
 
 ## Git rules

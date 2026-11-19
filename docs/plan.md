@@ -16,7 +16,7 @@
 |---|---|---|---|
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
 | M1 | Data model foundations: `users`, `countries`, `departments` | all | done |
-| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress: `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout` done; guards (then `GET /auth/me` as the guard's first protected route), login rate limit, admin seed next |
+| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress: login, refresh, logout, the global JWT and role guards, `GET /auth/me` and Swagger bearer auth done; login rate limit and admin seed next |
 | M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | planned |
 | M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |

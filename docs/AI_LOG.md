@@ -169,3 +169,22 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
 - **A constraint passed forward:** when the global JWT guard arrives, logout must be marked `@Public()`. An e2e test sends it a garbage `Authorization` header and expects 204, so forgetting that fails a test instead of breaking logout for expired sessions.
 - **Process:** tests were written first and seen failing at all three levels (6 unit, 9 e2e including Swagger, 4 integration) before any code. The cookie-clearing helper from the refresh step was reused, and the cookie-cleared assertion moved to module scope so both endpoints' tests share it.
 - **Verified:** unit (84), e2e (48), integration (43), lint, build and a type-check including the tests pass. `health.service.ts` and `main.ts` still fail `prettier --check`, as before this work.
+
+### 18. Global JWT and role guards, `GET /auth/me` and Swagger bearer auth (19 Nov 2026)
+
+- **Asked:** build the global guard with `@Public()`, the role guard and Swagger bearer auth. `GET /auth/me` was kept earlier and is built here as the first protected route.
+- **Design decisions made by the AI, for the author to review:**
+  - Secure by default: the guard is registered for the whole app, so a forgotten decorator means "needs a token", not "open".
+  - The token is checked from its signature alone, with no database call. The algorithm is pinned to HS256, and `exp`, a UUID `sub` and a known `role` are all required, so a validly signed but oddly shaped token is refused. Every failure returns the same 401 message.
+  - A route with no `@Roles` is open to any signed-in user, not only to `HR_ADMIN`, because `/auth/me` has to work for every role. The cost: an HR controller that forgets `@Roles('HR_ADMIN')` would be open to an `EMPLOYEE` once that role has users. Mitigation: a `CLAUDE.md` rule, and each HR controller's e2e tests must show an `EMPLOYEE` token gets 403. `@Roles()` with no roles does not compile, so it cannot silently mean "everyone".
+  - `RolesGuard` fails closed: if a role is required and there is no user, it is a 403.
+  - Logout is `@Public()`, as the previous step's test required. The Swagger pages are served outside Nest's routing, so the guard never sees them (an e2e test checks both load without a token).
+  - `GET /auth/me` returns the user from the database, not from the token, so it always shows the current role.
+- **Test-only controller:** no real route is role-restricted yet, so the e2e tests add a probe controller through `createTestApp({ controllers })`. The global guards apply to it exactly as to real controllers, which proves the registration rather than only the guard logic.
+- **Checking that the tests have teeth:** three mutations were applied and all were caught, then reverted (the guard file was diffed against a backup):
+  - Removing the algorithm pin fails the HS512 test.
+  - Making `exp` optional fails the no-expiry test.
+  - Swapping the order of the two global guards fails two e2e tests, including "401, not 403 when there is no token". This also confirmed an assumption I had not verified: providers registered with `APP_GUARD` run in declaration order.
+- **Process:** unit and e2e tests were written first and seen failing (missing modules, `service.me is not a function`, 10 e2e failures plus a guard spec that could not load). Everything passed on the first run after implementing.
+- **A smoke-test slip, corrected:** my first run of the compiled app used the wrong path (`dist/src/main.js`; it is `dist/main.js`), so it never started, but port 3999 already had a server answering `/health` with 200 and 404 for `/auth/*`. I noticed the 404s did not match the code and investigated rather than reading the output as a result. It is an old `node dist/main` from 00:31 today, from a build older than login and Swagger. I could not prove it was mine, so I did not kill it and used port 4010 instead. It is still running and the author may want to stop it. On the right path and port the compiled app behaved as expected: public routes open, `/auth/me` 401 without a token, the bearer scheme in the OpenAPI document, no dependency-injection errors.
+- **Verified:** unit (116), e2e (80), integration (43), lint, build and a type-check including the tests pass. `health.service.ts` and `main.ts` still fail `prettier --check`, as before this work.
