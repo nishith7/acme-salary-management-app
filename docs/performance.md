@@ -15,7 +15,7 @@
 - **Aggregate in the database.** Percentiles use `percentile_cont` with `GROUP BY`. The API never loads 10k rows to compute a median in application code.
 - **Server-side pagination.** The UI only ever receives one page plus a total count.
 - **Select only needed columns.** No `SELECT *`, no loading relations the screen does not show, and no N+1 queries: the directory is one query, not one query per row.
-- **Indexes follow the filters.** Planned: employees by `country`, `department`, `level`, `status`; salary history by `(employee_id, effective_from DESC)`; payouts by `(period, status)` plus the unique `(employee_id, period)`.
+- **Indexes follow the filters, and are added after measuring.** The `employees` table was created with only its unique `employee_code`, so there is a real "before" for every index. Candidates once the 10,000-employee seed exists: employees by `country`, `department`, `level`, `status`; salary history by `(employee_id, effective_from DESC)`; payouts by `(period, status)` plus the unique `(employee_id, period)`. Each is added only if `EXPLAIN (ANALYZE, BUFFERS)` shows a need, and recorded in section 5.
 - **Idempotent bulk operations in one statement.** Payout generation is a single insert with `ON CONFLICT DO NOTHING`; marking paid is a single `UPDATE` in a transaction.
 - **Stream exports.** CSV export streams rows rather than building the file in memory.
 - **Pooled connections.** The API uses Neon's pooled endpoint so concurrent requests do not each open a Postgres connection.
@@ -45,4 +45,4 @@ How: seed 10,000 employees, then time each endpoint over repeated calls and capt
 | Directory, filtered and sorted | TBD | TBD | TBD |
 | Insights: pay by country / department / level | TBD | TBD | TBD |
 | Monthly payout generation (10k rows) | TBD | TBD | TBD |
-| Seed script | TBD | TBD | TBD |
+| Seed script (10,000 employees; salary history not seeded yet) | n/a | 7.0 s | Inserts in 1,000-row batches with `createMany` and `skipDuplicates`. Measured once, inside one rolled-back transaction, from a laptop to Neon (us-east-1) through the pooled URL; the real `npm run seed` (direct URL, no wrapping transaction) has not been timed yet, so treat this as an estimate. |

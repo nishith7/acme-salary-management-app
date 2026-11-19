@@ -35,6 +35,8 @@
 
     *Cost:* Prisma Client is already typed, so a simple method such as `findByEmail` is a one-line pass-through. Repositories also return Prisma's generated types, not separate domain classes, so services stay coupled to those types. Both are accepted: separate entity classes and mappers would double the model code for no gain at this size. *Rules that keep it cheap:* a repository holds queries and no business rules; there is no generic `BaseRepository<T>`, which would hide Prisma's typed API; a method is added only when a service needs it.
 
+13. **Seed data from faker, with the shape decided by us.** `@faker-js/faker` (pinned to an exact version, a dev dependency used only by `npm run seed`) supplies the random choices and the names, in each country's own locale. What makes the data useful is not random rows but their structure, which is plain data in `src/seed/reference-data.ts`: country, department and level weights, a job title ladder per department, tenure that rises with level, about 6% leavers, and fewer women in engineering and at senior levels. *Costs:* faker's output for a given seed can change between versions, so the version is pinned and bumping it changes the dataset (a first version of the seed used hand-written name lists and a tiny random generator of its own, which cannot drift; the author asked for faker, which gives more varied, realistic names for 15 locales for free). Faker has no Latin-script option for Japan, the UAE or Singapore, so those countries get names in their own script, and a search typed in Latin letters will not find them; changing a country's locale is a one-line edit.
+
 ## Deliberately not chosen
 
 - **Docker Compose** — the app is reviewed through the hosted URL and demo video, not run locally.

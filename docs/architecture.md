@@ -51,7 +51,7 @@ Generation is idempotent: a unique constraint on `(employee_id, period)` means r
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
 
 ```mermaid
 erDiagram
@@ -80,12 +80,12 @@ erDiagram
     uuid id PK
     string employee_code UK
     string full_name
-    string gender
+    string gender "FEMALE, MALE or OTHER"
     string job_title
-    string level
+    int level "1 is the most junior"
     date joining_date
     string status "ACTIVE or TERMINATED"
-    date terminated_on
+    date terminated_on "null while active"
   }
   SALARY_RECORD {
     uuid id PK
@@ -147,7 +147,11 @@ Notes:
 - `SALARY_RECORD` is append-only. The current salary is the latest record with `effective_from <= today`. This is what makes every change auditable and growth computable (F3, F9).
 - All money columns are `NUMERIC` (Prisma `Decimal`), never floating point.
 - `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible.
-- Terminated employees are kept (`status`), never deleted, so history and payouts stay intact.
+- Terminated employees are kept (`status`), never deleted, so history and payouts stay intact. The foreign keys to `countries` and `departments` are `ON DELETE RESTRICT`, so a country or department with employees cannot be deleted either.
+- `employees` has no secondary indexes yet, on purpose. They are added after the 10,000-employee seed, only where `EXPLAIN` shows a need, and the before and after are recorded in [performance.md](performance.md). Only the unique `employee_code` is indexed, because uniqueness needs it.
+- `status` and `terminated_on` belong together (`TERMINATED` has a date, `ACTIVE` does not). The database does not enforce it, because Prisma cannot express that check without hand-written SQL; the service's single terminate operation sets both, and a `CHECK` can be added if that proves not to be enough.
+- `level` is an integer so it sorts correctly (text would put 10 before 2). Its range is validated by the API, not the database. `job_title` is free text for now.
+- Gender and level feed the pay insights (the gender pay gap by level, median pay by level), so they are plain columns on the employee rather than separate tables. Job title is a directory filter (F2), not an insight dimension.
 
 ## 5. Authentication and refresh tokens
 

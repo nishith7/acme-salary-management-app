@@ -66,6 +66,20 @@ There is no sign-up and no seed script yet: create the HR manager by hand. The p
 
    Use a lower-case email. A mixed-case email is stored as typed but the login looks it up in lower case, so it would never match. A hash from another algorithm or other parameters does not work either: login would simply say "Invalid email or password".
 
+## Seeding the database
+
+`npm run seed` loads the 15 countries, the 10 departments and **10,000 synthetic employees**, the dataset the requirements ask for. It builds the project first, then runs against `DIRECT_URL` (or `DATABASE_URL` if only that is set). It prints counts and timings, never a connection string.
+
+- **Safe to run again.** It only inserts what is missing and never changes or deletes a row, so if a run is interrupted, run it again to finish.
+- **A smaller set:** `npm run seed -- --count=500`. A later, larger run only adds people: the first 500 of a 10,000 run are identical to a run of 500.
+- **Reproducible.** The same seed gives the same people on any machine. That depends on `@faker-js/faker` staying at its pinned version: a different version can give different people.
+- **What the people look like.** A multinational: the US and India are the biggest offices, engineering the biggest department, there are seven levels in a pyramid, about 6% have left, and there are fewer women in engineering and at senior levels (so the gender pay gap insight has something to find). A handful of small country and level groups fall under the privacy threshold of 5, so that rule is visible too. All of it is synthetic.
+- **Names** come from faker in each country's own locale. Japan, the UAE and Singapore get names in their own script (Japanese, Arabic, Chinese), so a search typed in Latin letters will not find them. To change a country's locale, edit `locale` in `src/seed/reference-data.ts`.
+- **Starting over.** The seed never deletes. To reseed from scratch, delete the seeded employees yourself first, for example `DELETE FROM employees WHERE employee_code LIKE 'EMP-%';`, which removes every employee whose code starts with `EMP-`, and then run it again.
+- **Not seeded yet:** salary history. It arrives with the `salary_records` table, and the seed will be extended then.
+
+Measured once: inserting the 10,000 employees took about 7 seconds from a laptop to Neon (see [performance.md](../docs/performance.md)).
+
 ## Endpoints
 
 | Route | Purpose |
