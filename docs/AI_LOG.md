@@ -156,3 +156,16 @@ Each entry: what was asked, what the AI produced, what the author decided or cor
   - The integration tests were written before the code too, but did not fail: `$transaction` on a rolled-back transaction client exists at runtime and joins the surrounding transaction (checked with a probe: same connection and transaction id), so they ran against the real implementation. To show they were not vacuous, two rules were removed from the repository temporarily and the tests that guard them failed (the conditional retire and the active-only family revoke); both were restored.
   - The probe and concurrency scripts were throwaway files, deleted after use. The concurrency probe wrote one real test user to the dev database and deleted it, which cascaded to its tokens; 0 rows were left.
 - **Verified:** unit (78), e2e (39), integration (39), lint, build and a type-check including the tests pass. `health.service.ts` and `main.ts` still fail `prettier --check`, as before this work.
+
+### 17. Logout endpoint (19 Nov 2026)
+
+- **Asked:** build `POST /auth/logout`, the next step of the agreed auth order. While the author was reviewing, they asked what `GET /auth/me` is for. The AI said plainly that it is optional, because login and refresh already return the user, and recommended keeping it only as the first protected route for the guard. The author kept it, so it is now planned right after the guard.
+- **Design decisions made by the AI, for the author to review:**
+  - Logout reads only the refresh cookie, not the access token. It therefore works after the access token has expired, which is exactly when a user is most likely to click it.
+  - It always returns 204 and clears the cookie, even with no cookie, an unknown token or a repeated call. Failing would give a user stuck with a bad cookie no way out, and would tell an attacker whether a token exists.
+  - It revokes the whole family, even when the token it was given was already used or expired, because the user can be holding an older token while a newer one is still live.
+  - It ends one login session only. "Log out everywhere" is not built and is not in the requirements.
+  - If the database call fails, the cookie is not cleared and the request fails, so the UI knows the logout did not happen and can retry.
+- **A constraint passed forward:** when the global JWT guard arrives, logout must be marked `@Public()`. An e2e test sends it a garbage `Authorization` header and expects 204, so forgetting that fails a test instead of breaking logout for expired sessions.
+- **Process:** tests were written first and seen failing at all three levels (6 unit, 9 e2e including Swagger, 4 integration) before any code. The cookie-clearing helper from the refresh step was reused, and the cookie-cleared assertion moved to module scope so both endpoints' tests share it.
+- **Verified:** unit (84), e2e (48), integration (43), lint, build and a type-check including the tests pass. `health.service.ts` and `main.ts` still fail `prettier --check`, as before this work.
