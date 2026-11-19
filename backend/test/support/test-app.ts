@@ -15,10 +15,14 @@ export interface TestApp {
   app: INestApplication<App>;
   /** Stand-in for PrismaService.$queryRaw. No real database is used in e2e tests. */
   queryRaw: ReturnType<typeof vi.fn>;
-  /** Stand-in for prisma.user.findUnique. */
+  /** Stand-in for prisma.user.findUnique, whether by email or by id. */
   findUser: ReturnType<typeof vi.fn>;
-  /** Stand-in for prisma.refreshToken.create. */
+  /** Stand-in for prisma.refreshToken.create, inside a transaction or not. */
   createRefreshToken: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.refreshToken.findUnique. */
+  findRefreshToken: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.refreshToken.updateMany, inside a transaction or not. */
+  updateRefreshTokens: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -30,18 +34,36 @@ export async function createTestApp(): Promise<TestApp> {
   const queryRaw = vi.fn();
   const findUser = vi.fn();
   const createRefreshToken = vi.fn();
+  const findRefreshToken = vi.fn();
+  const updateRefreshTokens = vi.fn();
+
+  const prisma = {
+    $queryRaw: queryRaw,
+    user: { findUnique: findUser },
+    refreshToken: {
+      create: createRefreshToken,
+      findUnique: findRefreshToken,
+      updateMany: updateRefreshTokens,
+    },
+    // The fake transaction runs its work on the same fakes, so a test sees
+    // every call whether or not the code under test wrapped it in a transaction.
+    $transaction: (work: (tx: unknown) => Promise<unknown>) => work(prisma),
+  };
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
-    .useValue({
-      $queryRaw: queryRaw,
-      user: { findUnique: findUser },
-      refreshToken: { create: createRefreshToken },
-    })
+    .useValue(prisma)
     .compile();
 
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
   await app.init();
 
-  return { app, queryRaw, findUser, createRefreshToken };
+  return {
+    app,
+    queryRaw,
+    findUser,
+    createRefreshToken,
+    findRefreshToken,
+    updateRefreshTokens,
+  };
 }

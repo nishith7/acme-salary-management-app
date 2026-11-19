@@ -6,3 +6,10 @@ export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** One message for every login failure, so a response never says which part was wrong. */
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
+
+/**
+ * One message for every refresh failure (no cookie, unknown, expired, replayed),
+ * so a response never tells an attacker why a token was refused.
+ */
+export const SESSION_EXPIRED_MESSAGE =
+  'Your session has expired. Please log in again.';

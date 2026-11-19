@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '../generated/prisma/client.js';
+import type { RefreshToken, User } from '../generated/prisma/client.js';
 import type { UsersRepository } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
 import { PasswordHasher } from './password-hasher.js';
@@ -168,5 +168,290 @@ describe('AuthService.login', () => {
       expect(verify).toHaveBeenCalledWith(undefined, password);
       verify.mockRestore();
     });
+  });
+});
+
+describe('AuthService.refresh', () => {
+  const secret = 'a-test-secret-that-is-at-least-32-characters-long';
+  const now = new Date('2026-11-19T10:00:00.000Z');
+  const presented = 'the-refresh-token-value-the-browser-sent';
+
+  const passwords = new PasswordHasher();
+  const jwt = new JwtService({ secret });
+
+  const user: User = {
+    id: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11',
+    email: 'hr@acme.test',
+    passwordHash: 'not-used-by-refresh',
+    name: 'Hana Rao',
+    role: 'HR_ADMIN',
+    createdAt: now,
+    updatedAt: now,
+  };
+  const active: RefreshToken = {
+    id: '5d0c6f7e-3b1a-4c55-8f0e-2a9d4b6c7e10',
+    userId: user.id,
+    familyId: '9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f',
+    tokenHash: hashRefreshToken(presented),
+    expiresAt: new Date('2026-11-25T10:00:00.000Z'),
+    revokedAt: null,
+    createdAt: new Date('2026-11-18T10:00:00.000Z'),
+  };
+
+  let findById: ReturnType<typeof vi.fn>;
+  let findByHash: ReturnType<typeof vi.fn>;
+  let rotate: ReturnType<typeof vi.fn>;
+  let revokeFamily: ReturnType<typeof vi.fn>;
+  let service: AuthService;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+
+    findById = vi.fn().mockResolvedValue(user);
+    findByHash = vi.fn().mockResolvedValue(active);
+    rotate = vi.fn().mockResolvedValue(true);
+    revokeFamily = vi.fn().mockResolvedValue(undefined);
+    service = new AuthService(
+      { findById } as unknown as UsersRepository,
+      {
+        findByHash,
+        rotate,
+        revokeFamily,
+      } as unknown as RefreshTokensRepository,
+      passwords,
+      jwt,
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('with an active token', () => {
+    it('looks the token up by its hash, never by the raw value', async () => {
+      await service.refresh(presented);
+
+      expect(findByHash).toHaveBeenCalledWith(hashRefreshToken(presented));
+      expect(JSON.stringify(findByHash.mock.calls)).not.toContain(presented);
+    });
+
+    it('returns a new 15-minute access token built from the user as they are now', async () => {
+      findById.mockResolvedValue({ ...user, role: 'EMPLOYEE' });
+
+      const result = await service.refresh(presented);
+
+      const claims = jwt.verify<{
+        sub: string;
+        role: string;
+        iat: number;
+        exp: number;
+      }>(result.accessToken);
+      expect(claims.sub).toBe(user.id);
+      expect(claims.role).toBe('EMPLOYEE');
+      expect(claims.exp - claims.iat).toBe(15 * 60);
+      expect(result.expiresIn).toBe(15 * 60);
+    });
+
+    it('returns the user without the password hash', async () => {
+      const result = await service.refresh(presented);
+
+      expect(result.user).toEqual({
+        id: user.id,
+        email: 'hr@acme.test',
+        name: 'Hana Rao',
+        role: 'HR_ADMIN',
+      });
+    });
+
+    it('replaces the token with a new one in the same family, valid for 7 more days', async () => {
+      const result = await service.refresh(presented);
+
+      expect(rotate).toHaveBeenCalledOnce();
+      const [currentId, next, rotatedAt] = rotate.mock.calls[0] as [
+        string,
+        {
+          userId: string;
+          familyId: string;
+          tokenHash: string;
+          expiresAt: Date;
+        },
+        Date,
+      ];
+      expect(currentId).toBe(active.id);
+      expect(next.userId).toBe(user.id);
+      expect(next.familyId).toBe(active.familyId);
+      expect(next.expiresAt).toEqual(new Date('2026-11-26T10:00:00.000Z'));
+      expect(rotatedAt).toEqual(now);
+      expect(result.refreshToken.expiresAt).toEqual(next.expiresAt);
+    });
+
+    it('hands back a different token and stores only its hash', async () => {
+      const result = await service.refresh(presented);
+
+      const next = rotate.mock.calls[0]![1] as { tokenHash: string };
+      expect(result.refreshToken.value).not.toBe(presented);
+      expect(next.tokenHash).toBe(hashRefreshToken(result.refreshToken.value));
+      expect(JSON.stringify(rotate.mock.calls)).not.toContain(
+        result.refreshToken.value,
+      );
+    });
+
+    it('revokes nothing else', async () => {
+      await service.refresh(presented);
+
+      expect(revokeFamily).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('when the token is not usable', () => {
+    // [description, how to arrange it, the token the browser sends]
+    const unusable: [string, () => void, string | undefined][] = [
+      ['no token is sent', () => undefined, undefined],
+      ['an empty token is sent', () => undefined, ''],
+      [
+        'the token is unknown',
+        () => findByHash.mockResolvedValue(null),
+        presented,
+      ],
+      [
+        'the token has expired',
+        () =>
+          findByHash.mockResolvedValue({
+            ...active,
+            expiresAt: new Date('2026-11-19T09:59:59.000Z'),
+          }),
+        presented,
+      ],
+      [
+        'the token expires at this very moment',
+        () => findByHash.mockResolvedValue({ ...active, expiresAt: now }),
+        presented,
+      ],
+      [
+        'the user no longer exists',
+        () => findById.mockResolvedValue(null),
+        presented,
+      ],
+    ];
+
+    it.each(unusable)(
+      'rejects with 401 and issues no token when %s',
+      async (_label, arrange, token) => {
+        arrange();
+
+        await expect(service.refresh(token)).rejects.toBeInstanceOf(
+          UnauthorizedException,
+        );
+
+        expect(rotate).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(unusable)(
+      'does not revoke the family when %s',
+      async (_label, arrange, token) => {
+        arrange();
+
+        await service.refresh(token).catch(() => undefined);
+
+        expect(revokeFamily).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not even query the database when no token is sent', async () => {
+      await service.refresh(undefined).catch(() => undefined);
+
+      expect(findByHash).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('when a token that was already used is presented again', () => {
+    const replayed: RefreshToken = {
+      ...active,
+      revokedAt: new Date('2026-11-19T09:00:00.000Z'),
+    };
+
+    it('rejects with 401 and revokes every token in its family', async () => {
+      findByHash.mockResolvedValue(replayed);
+
+      await expect(service.refresh(presented)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      expect(revokeFamily).toHaveBeenCalledExactlyOnceWith(
+        replayed.familyId,
+        now,
+      );
+    });
+
+    it('issues no new token', async () => {
+      findByHash.mockResolvedValue(replayed);
+
+      await service.refresh(presented).catch(() => undefined);
+
+      expect(rotate).not.toHaveBeenCalled();
+    });
+
+    it('treats a token that was both used and has expired as a replay', async () => {
+      findByHash.mockResolvedValue({
+        ...replayed,
+        expiresAt: new Date('2026-11-19T09:59:59.000Z'),
+      });
+
+      await service.refresh(presented).catch(() => undefined);
+
+      expect(revokeFamily).toHaveBeenCalledWith(replayed.familyId, now);
+    });
+  });
+
+  describe('when a parallel request uses the token first', () => {
+    beforeEach(() => {
+      rotate.mockResolvedValue(false);
+    });
+
+    it('rejects with 401 and revokes the family, as it would for any replay', async () => {
+      await expect(service.refresh(presented)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      expect(revokeFamily).toHaveBeenCalledExactlyOnceWith(
+        active.familyId,
+        now,
+      );
+    });
+  });
+
+  it('gives one message for every failure, so the reason is not revealed', async () => {
+    const messageOf = async (arrange: () => void, token = presented) => {
+      findByHash.mockResolvedValue(active);
+      findById.mockResolvedValue(user);
+      rotate.mockResolvedValue(true);
+      arrange();
+      const error = await service.refresh(token).catch((e: Error) => e);
+      return (error as Error).message;
+    };
+
+    // One at a time: the scenarios share the same fakes.
+    const messages: string[] = [];
+    messages.push(await messageOf(() => undefined, ''));
+    messages.push(await messageOf(() => findByHash.mockResolvedValue(null)));
+    messages.push(
+      await messageOf(() =>
+        findByHash.mockResolvedValue({ ...active, expiresAt: now }),
+      ),
+    );
+    messages.push(
+      await messageOf(() =>
+        findByHash.mockResolvedValue({ ...active, revokedAt: now }),
+      ),
+    );
+    messages.push(await messageOf(() => findById.mockResolvedValue(null)));
+    messages.push(await messageOf(() => rotate.mockResolvedValue(false)));
+
+    expect(messages).toHaveLength(6);
+    expect(new Set(messages)).toEqual(
+      new Set(['Your session has expired. Please log in again.']),
+    );
   });
 });

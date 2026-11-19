@@ -4,7 +4,9 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -14,15 +16,20 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import {
   type LoginRequest,
   type LoginResponse,
   loginResponseSchema,
   loginSchema,
 } from './auth.schemas.js';
-import { AuthService } from './auth.service.js';
-import { REFRESH_COOKIE_NAME, refreshCookieOptions } from './refresh-cookie.js';
+import { AuthService, type SessionResult } from './auth.service.js';
+import {
+  clearRefreshCookieOptions,
+  readRefreshCookie,
+  REFRESH_COOKIE_NAME,
+  refreshCookieOptions,
+} from './refresh-cookie.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -52,20 +59,62 @@ export class AuthController {
     @Body({ schema: loginSchema }) body: LoginRequest,
     @Res({ passthrough: true }) response: Response,
   ): Promise<LoginResponse> {
-    const { refreshToken, ...session } = await this.auth.login(
-      body.email,
-      body.password,
-    );
+    const session = await this.auth.login(body.email, body.password);
+    return this.respondWithSession(response, session);
+  }
 
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh the session',
+    description:
+      'Reads the refresh token from its httpOnly cookie and returns a new access token, in the same shape as login. The refresh token works once: a new one replaces it in the cookie. Presenting a token that was already used ends every session that came from the same login.',
+  })
+  @ApiOkResponse({
+    standardSchema: loginResponseSchema,
+    description:
+      'A new access token. The cookie now holds a new refresh token.',
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'The cookie is missing, unknown, expired or was already used. The cookie is cleared and the user must log in again.',
+  })
+  async refresh(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LoginResponse> {
+    try {
+      const session = await this.auth.refresh(readRefreshCookie(request));
+      return this.respondWithSession(response, session);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        // A refused token is useless, so stop the browser sending it again.
+        response.clearCookie(
+          REFRESH_COOKIE_NAME,
+          clearRefreshCookieOptions({ secure: this.useSecureCookies() }),
+        );
+      }
+      throw error;
+    }
+  }
+
+  /** Puts the refresh token in its cookie and returns the rest as the response body. */
+  private respondWithSession(
+    response: Response,
+    { refreshToken, ...session }: SessionResult,
+  ): LoginResponse {
     response.cookie(
       REFRESH_COOKIE_NAME,
       refreshToken.value,
       refreshCookieOptions({
         expiresAt: refreshToken.expiresAt,
-        secure: this.config.get<string>('NODE_ENV') === 'production',
+        secure: this.useSecureCookies(),
       }),
     );
-
     return session;
+  }
+
+  private useSecureCookies(): boolean {
+    return this.config.get<string>('NODE_ENV') === 'production';
   }
 }

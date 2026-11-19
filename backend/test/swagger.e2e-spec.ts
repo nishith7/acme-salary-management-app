@@ -112,6 +112,35 @@ describe('Swagger (e2e)', () => {
       });
     });
 
+    describe('POST /auth/refresh', () => {
+      const operation = () => document.paths['/auth/refresh']?.post;
+
+      it('is documented under the Auth tag with 200 and 401 responses, and takes no body', () => {
+        expect(operation()?.tags).toEqual(['Auth']);
+        expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
+          '200',
+          '401',
+        ]);
+        expect(operation()?.requestBody).toBeUndefined();
+      });
+
+      it('returns the same session shape as login', () => {
+        const refresh =
+          operation()?.responses['200']?.content?.['application/json']?.schema;
+        const login =
+          document.paths['/auth/login']?.post?.responses['200']?.content?.[
+            'application/json'
+          ]?.schema;
+
+        expect(Object.keys(refresh?.properties ?? {}).sort()).toEqual([
+          'accessToken',
+          'expiresIn',
+          'user',
+        ]);
+        expect(refresh).toEqual(login);
+      });
+    });
+
     it('describes the response bodies as schemas', () => {
       expect(Object.keys(document.components.schemas).sort()).toEqual([
         'LivenessResponse',

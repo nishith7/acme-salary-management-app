@@ -1,5 +1,6 @@
 import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 
 export const SWAGGER_PATH = 'docs';
 
@@ -8,6 +9,8 @@ export const SWAGGER_PATH = 'docs';
  * exercise the same setup that runs in production.
  */
 export function configureApp(app: INestApplication): void {
+  // Fills request.cookies, which is where the refresh token arrives.
+  app.use(cookieParser());
   // Validates any parameter declared with a schema, such as @Body({ schema }),
   // and passes the handler the schema's output (for example a lower-cased email).
   app.useGlobalPipes(new StandardSchemaValidationPipe());
