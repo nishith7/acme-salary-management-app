@@ -16,14 +16,14 @@
 |---|---|---|---|
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
 | M1 | Data model foundations: `users`, `countries`, `departments` | all | done |
-| M2 | Auth: login, refresh-token rotation, JWT and `HR_ADMIN` role guards, admin seed | §3 | in progress: login, refresh, logout, the global JWT and role guards, `GET /auth/me` and Swagger bearer auth done; login rate limit and admin seed next |
+| M2 | Auth: login, refresh-token rotation, logout, JWT and `HR_ADMIN` role guards, `GET /auth/me`, login rate limit | §3 | done. No admin seed: the author creates the HR manager by hand (steps in `backend/README.md`) |
 | M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | planned |
 | M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
 | M6 | Monthly pay status and CSV export | F6, F7 | planned |
 | M7 | CI pipeline and quality tooling (Husky, lint-staged, commitlint, GitHub Actions) | quality | planned |
 | M8 | Frontend: directory, profile, insights, pay status | F1–F7 UI | planned |
-| M9 | Deploy (Neon, Render, Vercel), demo video, README polish | readiness | planned |
+| M9 | Deploy (Neon, Render, Vercel), demo video, README polish. Deploy checklist: set `JWT_SECRET`, set `TRUST_PROXY` and verify it with the two-network check in `backend/README.md`, confirm the Vercel `/api/*` proxy keeps the refresh cookie first-party | readiness | planned |
 | M10 | Stretch, if time: payslip PDF, increment tracking, CSV import, raise planner | F8–F11 | cut first |
 
 ## 3. Design notes
