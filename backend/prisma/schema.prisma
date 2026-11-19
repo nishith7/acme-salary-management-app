@@ -49,3 +49,11 @@ model Country {
 
   @@map("countries")
 }
+
+/// Reference data loaded by the seed.
+model Department {
+  id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name String @unique
+
+  @@map("departments")
+}
