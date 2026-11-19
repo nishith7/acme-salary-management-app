@@ -25,6 +25,21 @@ enum Role {
   @@map("user_role")
 }
 
+enum Gender {
+  FEMALE
+  MALE
+  OTHER
+
+  @@map("gender")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  TERMINATED
+
+  @@map("employee_status")
+}
+
 /// A login account. Only HR_ADMIN is used in v1; EMPLOYEE is reserved for later self-service.
 model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -70,6 +85,8 @@ model Country {
   /// ISO 4217, upper case (for example INR). Several countries may share one.
   currencyCode String @map("currency_code") @db.Char(3)
 
+  employees Employee[]
+
   @@map("countries")
 }
 
@@ -78,5 +95,41 @@ model Department {
   id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name String @unique
 
+  employees Employee[]
+
   @@map("departments")
+}
+
+/// A person on the payroll. Leavers are marked TERMINATED and kept, never deleted,
+/// so their salary history and payouts stay intact; that is why the two relations
+/// below restrict deletes.
+///
+/// There are no secondary indexes yet, on purpose: they are added after the
+/// 10,000-employee seed, only where EXPLAIN shows a need, and the before and after
+/// are recorded in docs/performance.md.
+///
+/// status and terminated_on belong together (TERMINATED has a date, ACTIVE does not).
+/// The database does not enforce that; the service's single terminate operation sets both.
+model Employee {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// The code HR knows the person by, for example EMP-00001.
+  employeeCode String         @unique @map("employee_code")
+  fullName     String         @map("full_name")
+  gender       Gender
+  jobTitle     String         @map("job_title")
+  /// 1 is the most junior. Salary bands and the pay-by-level insights use it.
+  level        Int
+  departmentId String         @map("department_id") @db.Uuid
+  countryId    String         @map("country_id") @db.Uuid
+  joiningDate  DateTime       @map("joining_date") @db.Date
+  status       EmployeeStatus @default(ACTIVE)
+  /// The last day, set only when status is TERMINATED.
+  terminatedOn DateTime?      @map("terminated_on") @db.Date
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  country    Country    @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@map("employees")
 }
