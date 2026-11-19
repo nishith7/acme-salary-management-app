@@ -84,12 +84,13 @@ describe('Swagger (e2e)', () => {
     describe('POST /auth/login', () => {
       const operation = () => document.paths['/auth/login']?.post;
 
-      it('is documented under the Auth tag with 200, 400 and 401 responses', () => {
+      it('is documented under the Auth tag with 200, 400, 401 and 429 responses', () => {
         expect(operation()?.tags).toEqual(['Auth']);
         expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
           '200',
           '400',
           '401',
+          '429',
         ]);
       });
 

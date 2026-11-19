@@ -13,6 +13,12 @@ export default defineConfig({
     env: {
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
       JWT_SECRET: 'e2e-only-secret-that-is-at-least-32-characters-long',
+      // Pinned so a developer's local .env cannot change what the tests see.
+      // The limit is high so the many login requests in other specs are not
+      // throttled; the rate-limit specs set their own small values.
+      TRUST_PROXY: '0',
+      LOGIN_RATE_LIMIT: '1000',
+      LOGIN_RATE_WINDOW_SECONDS: '60',
     },
   },
 });

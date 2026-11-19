@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -17,8 +18,10 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import {
   type AuthUser,
@@ -48,6 +51,9 @@ export class AuthController {
   ) {}
 
   @Public()
+  // Limits attempts per client address. It runs after the global guards and
+  // before the handler, so a blocked request never reaches the password check.
+  @UseGuards(ThrottlerGuard)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -63,6 +69,10 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description:
       'The email or password is wrong. The message does not say which.',
+  })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Too many login attempts from this client address in the current window. The Retry-After header gives the seconds to wait. Failed and successful attempts both count.',
   })
   async login(
     @Body({ schema: loginSchema }) body: LoginRequest,

@@ -16,6 +16,10 @@ export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** One message for every login failure, so a response never says which part was wrong. */
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
+/** The 429 message. It does not say how long to wait: the Retry-After header does. */
+export const LOGIN_RATE_LIMITED_MESSAGE =
+  'Too many login attempts. Try again later.';
+
 /**
  * One message for every refresh failure (no cookie, unknown, expired, replayed),
  * so a response never tells an attacker why a token was refused.
