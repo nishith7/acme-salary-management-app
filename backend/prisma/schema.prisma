@@ -35,7 +35,30 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  refreshTokens RefreshToken[]
+
   @@map("users")
+}
+
+/// One refresh token per row. Only the SHA-256 hash is stored, never the token itself.
+/// Every token issued by one login shares a family_id; presenting an already-revoked token
+/// revokes the whole family (reuse detection).
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  familyId  String    @map("family_id") @db.Uuid
+  /// SHA-256 hex digest (64 characters).
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  /// Set when the token is rotated or the user logs out. Null means still active.
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
 }
 
 /// Reference data loaded by the seed. One currency per country.
