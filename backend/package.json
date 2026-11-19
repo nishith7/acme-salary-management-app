@@ -24,7 +24,8 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:integration": "vitest run --config ./vitest.config.integration.ts",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "seed": "npm run build && node --env-file-if-exists=.env dist/seed/run.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -44,6 +45,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@faker-js/faker": "10.6.0",
     "@nestjs/cli": "^12.0.0",
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
