@@ -19,7 +19,7 @@ export const loginSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof loginSchema>;
 
-const authUserSchema = z.object({
+export const authUserSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   name: z.string(),

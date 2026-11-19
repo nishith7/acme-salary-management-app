@@ -5,6 +5,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../auth/public.decorator.js';
 import {
   LivenessResponse,
   ReadinessErrorResponse,
@@ -12,6 +13,8 @@ import {
 } from './health.dto.js';
 import { HealthService } from './health.service.js';
 
+// Public on purpose: platform health checks carry no token.
+@Public()
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {

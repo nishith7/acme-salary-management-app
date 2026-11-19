@@ -540,3 +540,57 @@ describe('AuthService.logout', () => {
     },
   );
 });
+
+describe('AuthService.me', () => {
+  const now = new Date('2026-11-19T10:00:00.000Z');
+  const user: User = {
+    id: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11',
+    email: 'hr@acme.test',
+    passwordHash: 'must-never-be-returned',
+    name: 'Hana Rao',
+    role: 'HR_ADMIN',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  let findById: ReturnType<typeof vi.fn>;
+  let service: AuthService;
+
+  beforeEach(() => {
+    findById = vi.fn().mockResolvedValue(user);
+    service = new AuthService(
+      { findById } as unknown as UsersRepository,
+      {} as RefreshTokensRepository,
+      new PasswordHasher(),
+      new JwtService({
+        secret: 'a-test-secret-that-is-at-least-32-characters-long',
+      }),
+    );
+  });
+
+  it('looks the user up by the id it is given', async () => {
+    await service.me(user.id);
+
+    expect(findById).toHaveBeenCalledWith(user.id);
+  });
+
+  it('returns the user as stored now, without the password hash', async () => {
+    const result = await service.me(user.id);
+
+    expect(result).toEqual({
+      id: user.id,
+      email: 'hr@acme.test',
+      name: 'Hana Rao',
+      role: 'HR_ADMIN',
+    });
+    expect(JSON.stringify(result)).not.toContain(user.passwordHash);
+  });
+
+  it('rejects with 401 when the user no longer exists, even though their token is still valid', async () => {
+    findById.mockResolvedValue(null);
+
+    await expect(service.me(user.id)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+});

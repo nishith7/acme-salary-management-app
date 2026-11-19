@@ -16,12 +16,19 @@ interface Operation {
     { content?: Record<string, { schema?: JsonSchema }> }
   >;
   requestBody?: { content?: Record<string, { schema?: JsonSchema }> };
+  security?: Record<string, string[]>[];
 }
 
 interface OpenApiDocument {
   info: { title: string };
   paths: Record<string, Partial<Record<'get' | 'post', Operation>>>;
-  components: { schemas: Record<string, unknown> };
+  components: {
+    schemas: Record<string, unknown>;
+    securitySchemes?: Record<
+      string,
+      { type?: string; scheme?: string; bearerFormat?: string }
+    >;
+  };
 }
 
 describe('Swagger (e2e)', () => {
@@ -149,6 +156,59 @@ describe('Swagger (e2e)', () => {
         expect(Object.keys(operation()?.responses ?? {})).toEqual(['204']);
         expect(operation()?.requestBody).toBeUndefined();
       });
+    });
+
+    describe('GET /auth/me', () => {
+      const operation = () => document.paths['/auth/me']?.get;
+
+      it('is documented under the Auth tag with 200 and 401 responses', () => {
+        expect(operation()?.tags).toEqual(['Auth']);
+        expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
+          '200',
+          '401',
+        ]);
+      });
+
+      it('returns the user, taken from the Zod schema', () => {
+        const schema =
+          operation()?.responses['200']?.content?.['application/json']?.schema;
+
+        expect(Object.keys(schema?.properties ?? {}).sort()).toEqual([
+          'email',
+          'id',
+          'name',
+          'role',
+        ]);
+      });
+    });
+
+    describe('authentication', () => {
+      it('declares a bearer JWT security scheme', () => {
+        expect(document.components.securitySchemes?.['bearer']).toEqual({
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        });
+      });
+
+      it('marks a protected route as needing it', () => {
+        expect(document.paths['/auth/me']?.get?.security).toEqual([
+          { bearer: [] },
+        ]);
+      });
+
+      it.each([
+        ['/health', 'get'],
+        ['/health/ready', 'get'],
+        ['/auth/login', 'post'],
+        ['/auth/refresh', 'post'],
+        ['/auth/logout', 'post'],
+      ] as const)(
+        'does not mark the public route %s as needing it',
+        (path, method) => {
+          expect(document.paths[path]?.[method]?.security).toBeUndefined();
+        },
+      );
     });
 
     it('describes the response bodies as schemas', () => {

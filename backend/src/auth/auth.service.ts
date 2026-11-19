@@ -4,12 +4,13 @@ import { JwtService } from '@nestjs/jwt';
 import type { User } from '../generated/prisma/client.js';
 import { UsersRepository } from '../users/users.repository.js';
 import {
+  ACCESS_TOKEN_ALGORITHM,
   ACCESS_TOKEN_TTL_SECONDS,
   INVALID_CREDENTIALS_MESSAGE,
   REFRESH_TOKEN_TTL_MS,
   SESSION_EXPIRED_MESSAGE,
 } from './auth.constants.js';
-import type { LoginResponse } from './auth.schemas.js';
+import type { AuthUser, LoginResponse } from './auth.schemas.js';
 import { PasswordHasher } from './password-hasher.js';
 import {
   generateRefreshToken,
@@ -137,6 +138,20 @@ export class AuthService {
     }
   }
 
+  /**
+   * The signed-in user as they are in the database now, which can differ from
+   * the access token (a role change shows here at once, in the token only
+   * after the next refresh). A valid token for a user who has since been
+   * deleted is refused.
+   */
+  async me(userId: string): Promise<AuthUser> {
+    const user = await this.users.findById(userId);
+    if (!user) {
+      throw this.sessionExpired();
+    }
+    return toAuthUser(user);
+  }
+
   private sessionExpired(): UnauthorizedException {
     return new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
   }
@@ -147,19 +162,22 @@ export class AuthService {
   ): Promise<SessionResult> {
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, role: user.role },
-      { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+      {
+        algorithm: ACCESS_TOKEN_ALGORITHM,
+        expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      },
     );
 
     return {
       accessToken,
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
+      user: toAuthUser(user),
       refreshToken,
     };
   }
+}
+
+/** The public view of a user. Picks fields one by one, so `passwordHash` can never leak. */
+function toAuthUser(user: User): AuthUser {
+  return { id: user.id, email: user.email, name: user.name, role: user.role };
 }

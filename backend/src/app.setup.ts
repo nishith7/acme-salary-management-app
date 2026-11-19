@@ -24,6 +24,8 @@ function setupSwagger(app: INestApplication): void {
       'API for the HR Manager to maintain salary data and answer questions about how the organisation pays people.',
     )
     .setVersion('0.1.0')
+    // Adds the "Authorize" button. Protected routes opt in with @ApiBearerAuth().
+    .addBearerAuth()
     .build();
 
   SwaggerModule.setup(

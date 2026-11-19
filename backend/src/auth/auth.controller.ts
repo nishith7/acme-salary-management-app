@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -11,6 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -19,12 +21,17 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import {
+  type AuthUser,
+  authUserSchema,
   type LoginRequest,
   type LoginResponse,
   loginResponseSchema,
   loginSchema,
 } from './auth.schemas.js';
 import { AuthService, type SessionResult } from './auth.service.js';
+import type { AuthenticatedUser } from './authenticated-user.js';
+import { CurrentUser } from './current-user.decorator.js';
+import { Public } from './public.decorator.js';
 import {
   clearRefreshCookieOptions,
   readRefreshCookie,
@@ -40,6 +47,7 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -64,6 +72,7 @@ export class AuthController {
     return this.respondWithSession(response, session);
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -96,6 +105,9 @@ export class AuthController {
     }
   }
 
+  // Public on purpose: it reads the refresh cookie, so it works after the
+  // access token has expired.
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -112,6 +124,25 @@ export class AuthController {
   ): Promise<void> {
     await this.auth.logout(readRefreshCookie(request));
     this.clearRefreshCookie(response);
+  }
+
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get the logged-in user',
+    description:
+      'Returns the user the access token belongs to, as they are stored now. Open to any signed-in role. The role in the token can be up to 15 minutes old; this is the current one.',
+  })
+  @ApiOkResponse({
+    standardSchema: authUserSchema,
+    description: 'The logged-in user.',
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'The access token is missing, invalid or expired, or its user no longer exists.',
+  })
+  me(@CurrentUser() user: AuthenticatedUser): Promise<AuthUser> {
+    return this.auth.me(user.id);
   }
 
   private clearRefreshCookie(response: Response): void {

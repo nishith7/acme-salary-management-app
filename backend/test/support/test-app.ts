@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../../src/app.module.js';
@@ -28,8 +28,14 @@ export interface TestApp {
 /**
  * Boots the real AppModule with the same setup as main.ts, replacing only the
  * database client with a fake so tests are fast and deterministic.
+ *
+ * `controllers` adds test-only controllers next to the real ones, to prove
+ * behaviour no real route shows yet (for example a route restricted to one
+ * role). The global guards apply to them exactly as to real controllers.
  */
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(
+  options: { controllers?: Type<unknown>[] } = {},
+): Promise<TestApp> {
   // PrismaService is replaced below, so nothing ever connects to a database.
   const queryRaw = vi.fn();
   const findUser = vi.fn();
@@ -49,7 +55,10 @@ export async function createTestApp(): Promise<TestApp> {
     // every call whether or not the code under test wrapped it in a transaction.
     $transaction: (work: (tx: unknown) => Promise<unknown>) => work(prisma),
   };
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule],
+    controllers: options.controllers ?? [],
+  })
     .overrideProvider(PrismaService)
     .useValue(prisma)
     .compile();

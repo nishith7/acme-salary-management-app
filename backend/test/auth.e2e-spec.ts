@@ -495,3 +495,99 @@ describe('POST /auth/logout (e2e)', () => {
     });
   });
 });
+
+describe('GET /auth/me (e2e)', () => {
+  const userId = '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11';
+  const jwt = new JwtService({ secret: TEST_JWT_SECRET });
+  let testApp: TestApp;
+  let user: User;
+
+  beforeAll(async () => {
+    testApp = await createTestApp();
+    const now = new Date();
+    user = {
+      id: userId,
+      email: 'hr@acme.test',
+      passwordHash: 'must-never-be-returned',
+      name: 'Hana Rao',
+      role: 'HR_ADMIN',
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(() => {
+    testApp.findUser.mockReset().mockResolvedValue(user);
+  });
+
+  const accessToken = (claims: object = { sub: userId, role: 'HR_ADMIN' }) =>
+    jwt.signAsync(claims, { algorithm: 'HS256', expiresIn: 900 });
+
+  const me = (token?: string) => {
+    const call = request(testApp.app.getHttpServer()).get('/auth/me');
+    return token === undefined
+      ? call
+      : call.set('Authorization', `Bearer ${token}`);
+  };
+
+  it('returns the logged-in user, and nothing secret', async () => {
+    const response = await me(await accessToken()).expect(200);
+
+    expect(response.body).toEqual({
+      id: userId,
+      email: 'hr@acme.test',
+      name: 'Hana Rao',
+      role: 'HR_ADMIN',
+    });
+    expect(JSON.stringify(response.body)).not.toContain(user.passwordHash);
+  });
+
+  it('looks the user up by the id in the token', async () => {
+    await me(await accessToken());
+
+    expect(testApp.findUser).toHaveBeenCalledWith({ where: { id: userId } });
+  });
+
+  it('returns the user as stored now, not the role the token was issued with', async () => {
+    // Promoted since the token was issued: the database is the source of truth.
+    const response = await me(
+      await accessToken({ sub: userId, role: 'EMPLOYEE' }),
+    ).expect(200);
+
+    expect((response.body as { role: string }).role).toBe('HR_ADMIN');
+  });
+
+  it('is open to any signed-in role, not only HR_ADMIN', async () => {
+    testApp.findUser.mockResolvedValue({ ...user, role: 'EMPLOYEE' });
+
+    const response = await me(
+      await accessToken({ sub: userId, role: 'EMPLOYEE' }),
+    ).expect(200);
+
+    expect((response.body as { role: string }).role).toBe('EMPLOYEE');
+  });
+
+  it('returns 401 without a token, and does not touch the database', async () => {
+    const response = await me().expect(401);
+
+    expect(response.body).toMatchObject({
+      statusCode: 401,
+      message: 'Invalid or missing access token',
+    });
+    expect(testApp.findUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when the user no longer exists, even with a valid token', async () => {
+    testApp.findUser.mockResolvedValue(null);
+
+    const response = await me(await accessToken()).expect(401);
+
+    expect(response.body).toMatchObject({
+      message: 'Your session has expired. Please log in again.',
+    });
+  });
+});
