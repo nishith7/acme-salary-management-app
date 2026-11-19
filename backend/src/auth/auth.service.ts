@@ -117,6 +117,26 @@ export class AuthService {
     return this.toSession(user, { value: next.token, expiresAt });
   }
 
+  /**
+   * Ends the session a refresh token belongs to by revoking its whole family.
+   * It never fails because of the token: logging out twice, or with a token
+   * that is unknown or expired, simply has nothing left to end. The family is
+   * revoked even if this particular token was already used, because the user
+   * may be holding an older token while a newer one is still live.
+   */
+  async logout(presented: string | undefined): Promise<void> {
+    if (!presented) {
+      return;
+    }
+
+    const current = await this.refreshTokens.findByHash(
+      hashRefreshToken(presented),
+    );
+    if (current) {
+      await this.refreshTokens.revokeFamily(current.familyId, new Date());
+    }
+  }
+
   private sessionExpired(): UnauthorizedException {
     return new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
   }

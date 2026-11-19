@@ -141,6 +141,16 @@ describe('Swagger (e2e)', () => {
       });
     });
 
+    describe('POST /auth/logout', () => {
+      const operation = () => document.paths['/auth/logout']?.post;
+
+      it('is documented under the Auth tag with a 204 response only, and takes no body', () => {
+        expect(operation()?.tags).toEqual(['Auth']);
+        expect(Object.keys(operation()?.responses ?? {})).toEqual(['204']);
+        expect(operation()?.requestBody).toBeUndefined();
+      });
+    });
+
     it('describes the response bodies as schemas', () => {
       expect(Object.keys(document.components.schemas).sort()).toEqual([
         'LivenessResponse',

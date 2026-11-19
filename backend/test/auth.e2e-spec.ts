@@ -15,6 +15,16 @@ const setCookieOf = (response: request.Response): string =>
     '; ',
   ) ?? '';
 
+/** The response tells the browser to delete the refresh cookie. */
+const expectCookieCleared = (response: request.Response) => {
+  const cookie = setCookieOf(response);
+  expect(cookie).toMatch(/^refresh_token=;/);
+  expect(cookie).toContain('Path=/auth');
+  expect(cookie).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+  expect(cookie).toContain('HttpOnly');
+  expect(cookie).toContain('SameSite=Strict');
+};
+
 describe('POST /auth/login (e2e)', () => {
   const password = 'correct horse battery staple';
   let testApp: TestApp;
@@ -222,15 +232,6 @@ describe('POST /auth/refresh (e2e)', () => {
       .post('/auth/refresh')
       .set('Cookie', `refresh_token=${token}`);
 
-  const expectCookieCleared = (response: request.Response) => {
-    const cookie = setCookieOf(response);
-    expect(cookie).toMatch(/^refresh_token=;/);
-    expect(cookie).toContain('Path=/auth');
-    expect(cookie).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Strict');
-  };
-
   describe('with an active refresh token cookie', () => {
     it('returns 200 with a new access token and the user, and nothing secret', async () => {
       const response = await refreshWith(presented).expect(200);
@@ -379,6 +380,118 @@ describe('POST /auth/refresh (e2e)', () => {
         where: { familyId: stored.familyId, revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
+    });
+  });
+});
+
+describe('POST /auth/logout (e2e)', () => {
+  const presented = 'Zm9yLXRlc3RzLW9ubHktbm90LWEtcmVhbC10b2tlbi0xMjM';
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  let testApp: TestApp;
+  let stored: RefreshToken;
+
+  beforeAll(async () => {
+    testApp = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(() => {
+    stored = {
+      id: '5d0c6f7e-3b1a-4c55-8f0e-2a9d4b6c7e10',
+      userId: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11',
+      familyId: '9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f',
+      tokenHash: hashRefreshToken(presented),
+      expiresAt: new Date(Date.now() + 3 * DAY_MS),
+      revokedAt: null,
+      createdAt: new Date(Date.now() - DAY_MS),
+    };
+    testApp.findRefreshToken.mockReset().mockResolvedValue(stored);
+    testApp.updateRefreshTokens.mockReset().mockResolvedValue({ count: 2 });
+  });
+
+  const logoutWith = (token: string) =>
+    request(testApp.app.getHttpServer())
+      .post('/auth/logout')
+      .set('Cookie', `refresh_token=${token}`);
+
+  const expectFamilyRevoked = () =>
+    expect(testApp.updateRefreshTokens).toHaveBeenCalledExactlyOnceWith({
+      where: { familyId: stored.familyId, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+
+  describe('with a refresh token cookie', () => {
+    it('returns 204 with no body and clears the cookie', async () => {
+      const response = await logoutWith(presented).expect(204);
+
+      expect(response.text).toBe('');
+      expectCookieCleared(response);
+    });
+
+    it('looks the token up by its hash', async () => {
+      await logoutWith(presented);
+
+      expect(testApp.findRefreshToken).toHaveBeenCalledWith({
+        where: { tokenHash: hashRefreshToken(presented) },
+      });
+    });
+
+    it('revokes every active token in the token’s family', async () => {
+      await logoutWith(presented).expect(204);
+
+      expectFamilyRevoked();
+    });
+
+    it('still revokes the family when the cookie holds a token that was already used', async () => {
+      testApp.findRefreshToken.mockResolvedValue({
+        ...stored,
+        revokedAt: new Date(Date.now() - 60_000),
+      });
+
+      await logoutWith(presented).expect(204);
+
+      expectFamilyRevoked();
+    });
+
+    it('needs no access token, so it still works after the access token has expired', async () => {
+      await logoutWith(presented)
+        .set('Authorization', 'Bearer not-a-valid-or-expired-token')
+        .expect(204);
+
+      expectFamilyRevoked();
+    });
+  });
+
+  describe('without a usable refresh token cookie', () => {
+    it('returns 204 and clears the cookie when none is sent, without touching the database', async () => {
+      const response = await request(testApp.app.getHttpServer())
+        .post('/auth/logout')
+        .expect(204);
+
+      expectCookieCleared(response);
+      expect(testApp.findRefreshToken).not.toHaveBeenCalled();
+      expect(testApp.updateRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it('returns 204 and revokes nothing for an unknown token', async () => {
+      testApp.findRefreshToken.mockResolvedValue(null);
+
+      const response = await logoutWith(presented).expect(204);
+
+      expectCookieCleared(response);
+      expect(testApp.updateRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it('does not accept the token from the request body', async () => {
+      await request(testApp.app.getHttpServer())
+        .post('/auth/logout')
+        .send({ refresh_token: presented })
+        .expect(204);
+
+      expect(testApp.findRefreshToken).not.toHaveBeenCalled();
     });
   });
 });

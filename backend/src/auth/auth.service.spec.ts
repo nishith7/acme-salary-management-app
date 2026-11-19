@@ -455,3 +455,88 @@ describe('AuthService.refresh', () => {
     );
   });
 });
+
+describe('AuthService.logout', () => {
+  const now = new Date('2026-11-19T10:00:00.000Z');
+  const presented = 'the-refresh-token-value-the-browser-sent';
+  const token: RefreshToken = {
+    id: '5d0c6f7e-3b1a-4c55-8f0e-2a9d4b6c7e10',
+    userId: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11',
+    familyId: '9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f',
+    tokenHash: hashRefreshToken(presented),
+    expiresAt: new Date('2026-11-25T10:00:00.000Z'),
+    revokedAt: null,
+    createdAt: new Date('2026-11-18T10:00:00.000Z'),
+  };
+
+  let findByHash: ReturnType<typeof vi.fn>;
+  let revokeFamily: ReturnType<typeof vi.fn>;
+  let service: AuthService;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+
+    findByHash = vi.fn().mockResolvedValue(token);
+    revokeFamily = vi.fn().mockResolvedValue(undefined);
+    service = new AuthService(
+      {} as UsersRepository,
+      { findByHash, revokeFamily } as unknown as RefreshTokensRepository,
+      new PasswordHasher(),
+      new JwtService({
+        secret: 'a-test-secret-that-is-at-least-32-characters-long',
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('looks the token up by its hash, never by the raw value', async () => {
+    await service.logout(presented);
+
+    expect(findByHash).toHaveBeenCalledWith(hashRefreshToken(presented));
+    expect(JSON.stringify(findByHash.mock.calls)).not.toContain(presented);
+  });
+
+  it('revokes every token in the family of the token it was given', async () => {
+    await service.logout(presented);
+
+    expect(revokeFamily).toHaveBeenCalledExactlyOnceWith(token.familyId, now);
+  });
+
+  it('revokes the family even when the token itself was already used or has expired', async () => {
+    // A user can log out holding an older token while a newer one is still live.
+    findByHash.mockResolvedValue({
+      ...token,
+      revokedAt: new Date('2026-11-19T09:00:00.000Z'),
+      expiresAt: new Date('2026-11-19T09:30:00.000Z'),
+    });
+
+    await service.logout(presented);
+
+    expect(revokeFamily).toHaveBeenCalledExactlyOnceWith(token.familyId, now);
+  });
+
+  it('does nothing, and does not fail, for a token it does not know', async () => {
+    findByHash.mockResolvedValue(null);
+
+    await expect(service.logout(presented)).resolves.toBeUndefined();
+
+    expect(revokeFamily).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no token', undefined],
+    ['an empty token', ''],
+  ])(
+    'does nothing, without querying the database, for %s',
+    async (_l, value) => {
+      await expect(service.logout(value)).resolves.toBeUndefined();
+
+      expect(findByHash).not.toHaveBeenCalled();
+      expect(revokeFamily).not.toHaveBeenCalled();
+    },
+  );
+});

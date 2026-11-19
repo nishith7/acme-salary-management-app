@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ApiBadRequestResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -89,13 +90,35 @@ export class AuthController {
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         // A refused token is useless, so stop the browser sending it again.
-        response.clearCookie(
-          REFRESH_COOKIE_NAME,
-          clearRefreshCookieOptions({ secure: this.useSecureCookies() }),
-        );
+        this.clearRefreshCookie(response);
       }
       throw error;
     }
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Log out',
+    description:
+      'Ends the session the refresh cookie belongs to: every refresh token from that login stops working, and the cookie is cleared. It needs no access token, so it works after the access token has expired. Other devices stay logged in. It always succeeds, even with no cookie or an unknown one.',
+  })
+  @ApiNoContentResponse({
+    description: 'Logged out. The refresh token cookie is cleared.',
+  })
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    await this.auth.logout(readRefreshCookie(request));
+    this.clearRefreshCookie(response);
+  }
+
+  private clearRefreshCookie(response: Response): void {
+    response.clearCookie(
+      REFRESH_COOKIE_NAME,
+      clearRefreshCookieOptions({ secure: this.useSecureCookies() }),
+    );
   }
 
   /** Puts the refresh token in its cookie and returns the rest as the response body. */
