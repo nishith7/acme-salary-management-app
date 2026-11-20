@@ -7,6 +7,7 @@ interface JsonSchema {
   required?: string[];
   properties?: Record<string, JsonSchema>;
   description?: string;
+  example?: unknown;
 }
 
 interface Operation {
@@ -21,7 +22,7 @@ interface Operation {
 
 interface OpenApiDocument {
   info: { title: string };
-  paths: Record<string, Partial<Record<'get' | 'post', Operation>>>;
+  paths: Record<string, Partial<Record<'get' | 'post' | 'query', Operation>>>;
   components: {
     schemas: Record<string, unknown>;
     securitySchemes?: Record<
@@ -62,6 +63,19 @@ describe('Swagger (e2e)', () => {
 
     it('is titled for this API', () => {
       expect(document.info.title).toBe('ACME Salary Management API');
+    });
+
+    // At OpenAPI 3.0 and 3.1 Swagger silently leaves out routes that use the HTTP
+    // QUERY method, so this fails if the document is not 3.2.
+    it('documents QUERY /employees with its JSON body and bearer token', () => {
+      const operation = document.paths['/employees']?.query;
+
+      expect(operation?.tags).toEqual(['Employees']);
+      // The sample Swagger pre-fills in "Try it out", instead of "string" placeholders.
+      expect(
+        operation?.requestBody?.content?.['application/json']?.schema?.example,
+      ).toMatchObject({ countries: ['IN', 'US'], pageSize: 25 });
+      expect(operation?.security).toEqual([{ bearer: [] }]);
     });
 
     it('documents GET /health under the Health tag with a 200 response', () => {

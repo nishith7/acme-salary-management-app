@@ -47,6 +47,9 @@ function setupSwagger(app: INestApplication): void {
       'API for the HR Manager to maintain salary data and answer questions about how the organisation pays people.',
     )
     .setVersion('0.1.0')
+    // OpenAPI 3.2 is the first version with a `query` operation. At 3.0 and 3.1
+    // Swagger silently leaves out every route that uses the HTTP QUERY method.
+    .setOpenAPIVersion('3.2.0')
     // Adds the "Authorize" button. Protected routes opt in with @ApiBearerAuth().
     .addBearerAuth()
     .build();
