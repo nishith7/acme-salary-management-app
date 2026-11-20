@@ -1,5 +1,0 @@
-/* Global base only. Component styling comes with the UI library chosen in docs/tech-stack.md. */
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-}

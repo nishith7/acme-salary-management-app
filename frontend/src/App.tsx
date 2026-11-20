@@ -1,7 +1,11 @@
+import { RouterProvider } from 'react-router';
+import { AppProviders } from './app/providers.tsx';
+import { router } from './app/router.ts';
+
 export default function App() {
   return (
-    <main>
-      <h1>ACME Salary Management</h1>
-    </main>
+    <AppProviders>
+      <RouterProvider router={router} />
+    </AppProviders>
   );
 }
