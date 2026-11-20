@@ -82,7 +82,8 @@ export interface PayPosition {
   level: number;
   countryCode: string;
   currencyCode: string;
-  departmentName: string;
+  /** Left out for the department-neutral midpoint that salary bands use (a factor of 1). */
+  departmentName?: string;
 }
 
 /** The midpoint annual pay for the position, in the position's own currency. */
@@ -102,11 +103,10 @@ export function midpointPay(
     countryCode,
     'pay index for country',
   );
-  const factor = lookup(
-    model.departmentFactor,
-    departmentName,
-    'factor for department',
-  );
+  const factor =
+    departmentName === undefined
+      ? 1
+      : lookup(model.departmentFactor, departmentName, 'factor for department');
   const rate = lookup(
     model.unitsPerUsd,
     currencyCode,

@@ -1,13 +1,15 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { DEFAULT_EMPLOYEE_COUNT, seedEmployees } from './seed-employees.js';
+import { seedFxRates, seedSalaryBands } from './seed-rates.js';
 import { seedSalaryHistory } from './seed-salaries.js';
 
 /**
  * Command line entry for the seed. Run it with `npm run seed`; add
  * `-- --count=500` for a smaller set. It loads the reference data and the
- * employees, then the salary history of those employees. It prints counts and
- * timings only, never a connection string.
+ * employees, then the salary bands and exchange rates, then the salary history
+ * of those employees. It prints counts and timings only, never a connection
+ * string.
  *
  * It uses DIRECT_URL (the direct connection, as the architecture says for the
  * seed) and falls back to DATABASE_URL if only that is set.
@@ -37,6 +39,12 @@ async function main(): Promise<void> {
     console.log(
       `Done in ${seconds}s. Countries created: ${result.countriesCreated}, departments created: ${result.departmentsCreated}, ` +
         `employees created: ${result.employeesCreated}, already present and left unchanged: ${result.employeesSkipped}.`,
+    );
+
+    const bands = await seedSalaryBands(prisma);
+    const rates = await seedFxRates(prisma);
+    console.log(
+      `Salary bands created: ${bands.created}, exchange rates created: ${rates.created} (rows already present are left unchanged).`,
     );
 
     console.log(`Seeding the salary history of those ${count} employees...`);

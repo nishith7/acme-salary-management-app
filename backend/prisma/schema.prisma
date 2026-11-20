@@ -96,7 +96,8 @@ model Country {
   /// ISO 4217, upper case (for example INR). Several countries may share one.
   currencyCode String @map("currency_code") @db.Char(3)
 
-  employees Employee[]
+  employees   Employee[]
+  salaryBands SalaryBand[]
 
   @@map("countries")
 }
@@ -177,4 +178,36 @@ model SalaryRecord {
   changedBy User?    @relation(fields: [changedById], references: [id], onDelete: Restrict)
 
   @@map("salary_records")
+}
+
+/// The pay range for one level in one country, in that country's currency and in the
+/// same unit as salary_records.annual_amount (annual gross). Reference data loaded by
+/// the seed. One band per country and level, the same for every department, so a
+/// department that pays below the country norm shows up as under the band.
+/// min_amount < max_amount is validated by the API (Prisma cannot express the check).
+model SalaryBand {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryId String  @map("country_id") @db.Uuid
+  /// 1 is the most junior, as in employees.level.
+  level     Int
+  minAmount Decimal @map("min_amount") @db.Decimal(14, 2)
+  maxAmount Decimal @map("max_amount") @db.Decimal(14, 2)
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@unique([countryId, level])
+  @@map("salary_bands")
+}
+
+/// How many units of a currency one US dollar buys, from valid_from, so a USD amount is
+/// amount / units_per_usd (the USD row is 1). Reference data loaded by the seed; the
+/// rates are illustrative, not market data. Dated, so a later rate can be added without
+/// losing the old one, and not tied to a country: a country's currency selects the row.
+model FxRate {
+  currencyCode String   @map("currency_code") @db.Char(3)
+  validFrom    DateTime @map("valid_from") @db.Date
+  unitsPerUsd  Decimal  @map("units_per_usd") @db.Decimal(18, 8)
+
+  @@id([currencyCode, validFrom])
+  @@map("fx_rates")
 }
