@@ -5,7 +5,7 @@
 ## 1. Approach
 
 - **Vertical slices, test-first.** Each slice is a small, working piece of behaviour (data model, then API, then UI) with fast deterministic tests, committed on its own.
-- **Tables arrive with the feature that needs them,** one table at a time, each reviewed and migrated on its own. The remaining tables (`salary_records`, `imports`, `salary_bands`, `fx_rates`) are designed next to the features and queries that use them, not guessed at up front.
+- **Tables arrive with the feature that needs them,** one table at a time, each reviewed and migrated on its own. The only table left, `imports`, is designed next to the import feature that uses it, not guessed at up front.
 - **Backend first, then frontend, then deploy.** The API and data model are the riskiest part, so they are built and tested before the UI depends on them.
 - **Must before anything else.** F1–F7 are the product. F8 and F9 (Should) are built only if time remains; they are cut first.
 - **Definition of done for a slice:** lint, unit tests and build pass; docs touched if a decision changed; a short entry added to [AI_LOG.md](AI_LOG.md) when AI made a notable contribution or needed correction; committed with a Conventional Commit message.

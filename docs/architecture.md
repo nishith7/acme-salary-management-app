@@ -61,7 +61,7 @@ sequenceDiagram
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`, `salary_records`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`, `salary_records`, `salary_bands`, `fx_rates`. Only `imports` is left; it is designed with the import feature (M6). Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
 
 ```mermaid
 erDiagram
@@ -145,7 +145,7 @@ erDiagram
   FX_RATE {
     string currency_code PK
     date valid_from PK
-    decimal usd_per_unit
+    decimal units_per_usd "units of the currency per 1 USD"
   }
 ```
 
@@ -156,7 +156,8 @@ Notes:
 - **Append-only is a rule of the code, not of the database.** The repository for this table will offer inserts and reads, never update or delete; enforcing it in Postgres would need a trigger, which is hand-written SQL, and can be added if that proves not to be enough. `annual_amount > 0` is validated by the API for the same reason. No secondary indexes yet; the likely first one is `(employee_id, effective_from DESC)`, added after salary history is seeded and the query plans show a need.
 - `IMPORT` is what makes uploads traceable: each import records who uploaded it, its outcome counts and whether it was applied, and the salary records it created point back to it. Its exact columns are settled when the table is designed.
 - All money columns are `NUMERIC` (Prisma `Decimal`), never floating point.
-- `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible.
+- `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible. **It is built.** It stores `units_per_usd` (how many units of the currency one dollar buys, so a USD amount is `amount / units_per_usd`) rather than `usd_per_unit`, because the seeded pay is built from rates such as 83 rupees or 0.92 euros per dollar, which a decimal stores exactly, whereas 1/83 cannot be. One row per currency including USD (1), `valid_from` 2010-01-01 so it covers all of the history; the rates are illustrative, not market data.
+- **`salary_bands` is built:** one row per country and level (15 x 7 = 105), unique on `(country_id, level)`, in the country's currency and the unit of `salary_records.annual_amount`. Min and max are the pay model's department-neutral midpoint minus and plus 15%. There is no per-department band (that would be 1,050 rows), so a department that pays below the country norm shows up as under the band: on the seeded data 15.1% of people are outside their band overall, with 31% of Customer Support under it and 13% of Engineering over it. That is a visible finding, not a bug, and the seed (not the schema) decides it. `min_amount < max_amount` is validated by the API.
 - Terminated employees are kept (`status`), never deleted, so their salary history stays intact. The foreign keys to `countries` and `departments` are `ON DELETE RESTRICT`, so a country or department with employees cannot be deleted either.
 - `employees` has no secondary indexes yet, on purpose. They are added after the 10,000-employee seed, only where `EXPLAIN` shows a need, and the before and after are recorded in [performance.md](performance.md). Only the unique `employee_code` is indexed, because uniqueness needs it.
 - `status` and `terminated_on` belong together (`TERMINATED` has a date, `ACTIVE` does not). The database does not enforce it, because Prisma cannot express that check without hand-written SQL; the service's single terminate operation sets both, and a `CHECK` can be added if that proves not to be enough.
