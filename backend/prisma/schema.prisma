@@ -40,6 +40,16 @@ enum EmployeeStatus {
   @@map("employee_status")
 }
 
+enum SalaryChangeReason {
+  HIRE
+  PROMOTION
+  MERIT
+  MARKET_ADJUSTMENT
+  CORRECTION
+
+  @@map("salary_change_reason")
+}
+
 /// A login account. Only HR_ADMIN is used in v1; EMPLOYEE is reserved for later self-service.
 model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -51,6 +61,7 @@ model User {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   refreshTokens RefreshToken[]
+  salaryChanges SalaryRecord[]
 
   @@map("users")
 }
@@ -131,5 +142,39 @@ model Employee {
   department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   country    Country    @relation(fields: [countryId], references: [id], onDelete: Restrict)
 
+  salaryRecords SalaryRecord[]
+
   @@map("employees")
+}
+
+/// One salary an employee has been on, from effectiveFrom. Append-only: a salary is
+/// never edited or deleted; a change, or the correction of a mistake, is a new record.
+/// The current salary is the latest effectiveFrom up to today, with ties going to the
+/// newest createdAt, so a correction can share the date of the record it fixes.
+///
+/// There are no secondary indexes yet, on purpose (see Employee). The likely first one is
+/// (employee_id, effective_from DESC), added once the salary history is seeded and the
+/// query plans show a need. annual_amount > 0 is validated by the API, because Prisma
+/// cannot express that check without hand-written SQL.
+model SalaryRecord {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId    String              @map("employee_id") @db.Uuid
+  /// Annual gross base pay, in currencyCode. A decimal, never a float.
+  annualAmount  Decimal             @map("annual_amount") @db.Decimal(14, 2)
+  /// ISO 4217, upper case. Stored on every record so the history keeps its meaning
+  /// if the employee later moves to another country.
+  currencyCode  String              @map("currency_code") @db.Char(3)
+  effectiveFrom DateTime            @map("effective_from") @db.Date
+  /// Why the salary changed. Null when no reason was given, for example in a
+  /// spreadsheet upload; the API requires one for a change made in the app.
+  reason        SalaryChangeReason?
+  /// Who recorded it. Null when the seed loaded it. A user who changed a salary
+  /// cannot be deleted, so the audit trail survives.
+  changedById   String?             @map("changed_by") @db.Uuid
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  changedBy User?    @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("salary_records")
 }

@@ -38,7 +38,7 @@ describe('employees table (integration)', () => {
       fullName: string;
     }> = {},
   ) => ({
-    employeeCode: 'EMP-00001',
+    employeeCode: 'EMPTEST-00001',
     fullName: 'Hana Rao',
     gender: 'FEMALE' as const,
     jobTitle: 'Software Engineer',
@@ -151,7 +151,7 @@ describe('employees table (integration)', () => {
       });
 
       expect(found).toMatchObject({
-        employeeCode: 'EMP-00001',
+        employeeCode: 'EMPTEST-00001',
         fullName: 'Hana Rao',
         gender: 'FEMALE',
         jobTitle: 'Software Engineer',
@@ -187,7 +187,7 @@ describe('employees table (integration)', () => {
       await tx.employee.create({ data: employeeData(refs) });
 
       const second = await tx.employee.create({
-        data: employeeData(refs, { employeeCode: 'EMP-00002' }),
+        data: employeeData(refs, { employeeCode: 'EMPTEST-00002' }),
       });
 
       expect(second.fullName).toBe('Hana Rao');

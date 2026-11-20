@@ -32,21 +32,21 @@ describe('departments table (integration)', () => {
   it('generates a uuid id when a department is created', () =>
     inRollback(prisma, async (tx) => {
       const department = await tx.department.create({
-        data: { name: 'Engineering' },
+        data: { name: 'Test Department Alpha' },
       });
 
       expect(department.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
-      expect(department.name).toBe('Engineering');
+      expect(department.name).toBe('Test Department Alpha');
     }));
 
   it('rejects a second department with the same name', () =>
     inRollback(prisma, async (tx) => {
-      await tx.department.create({ data: { name: 'Engineering' } });
+      await tx.department.create({ data: { name: 'Test Department Alpha' } });
 
       await expect(
-        tx.department.create({ data: { name: 'Engineering' } }),
+        tx.department.create({ data: { name: 'Test Department Alpha' } }),
       ).rejects.toMatchObject({ code: 'P2002' });
     }));
 });

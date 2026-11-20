@@ -16,7 +16,9 @@ describe('countries table (integration)', () => {
     await prisma.$disconnect();
   });
 
-  const india = { code: 'IN', name: 'India', currencyCode: 'INR' };
+  // Made-up codes (XA to XC are reserved for private use), so these tests can never
+  // clash with the real countries the seed loads.
+  const home = { code: 'XA', name: 'Testland Alpha', currencyCode: 'XXX' };
 
   it('has exactly the reviewed columns, all required', () =>
     inRollback(prisma, async (tx) => {
@@ -66,33 +68,34 @@ describe('countries table (integration)', () => {
 
   it('generates a uuid id when a country is created', () =>
     inRollback(prisma, async (tx) => {
-      const country = await tx.country.create({ data: india });
+      const country = await tx.country.create({ data: home });
 
       expect(country.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
-      expect(country).toMatchObject(india);
+      expect(country).toMatchObject(home);
     }));
 
   it('rejects a second country with the same code', () =>
     inRollback(prisma, async (tx) => {
-      await tx.country.create({ data: india });
+      await tx.country.create({ data: home });
 
       await expect(
-        tx.country.create({ data: { ...india, name: 'Bharat' } }),
+        tx.country.create({ data: { ...home, name: 'Another Name' } }),
       ).rejects.toMatchObject({ code: 'P2002' });
     }));
 
+  // XTS is the ISO 4217 code reserved for testing, so no real country uses it.
   it('allows several countries to share one currency', () =>
     inRollback(prisma, async (tx) => {
       await tx.country.create({
-        data: { code: 'DE', name: 'Germany', currencyCode: 'EUR' },
+        data: { code: 'XB', name: 'Testland Beta', currencyCode: 'XTS' },
       });
       await tx.country.create({
-        data: { code: 'FR', name: 'France', currencyCode: 'EUR' },
+        data: { code: 'XC', name: 'Testland Gamma', currencyCode: 'XTS' },
       });
 
-      const euro = await tx.country.count({ where: { currencyCode: 'EUR' } });
-      expect(euro).toBe(2);
+      const shared = await tx.country.count({ where: { currencyCode: 'XTS' } });
+      expect(shared).toBe(2);
     }));
 });
