@@ -91,10 +91,15 @@ export function generateEmployees(
 
   const employees: GeneratedEmployee[] = [];
   for (let number = 1; number <= count; number++) {
-    const code = `${codePrefix}-${String(number).padStart(5, '0')}`;
+    const code = formatEmployeeCode(codePrefix, number);
     employees.push(generateOne(faker, nameFakers, code, asOf));
   }
   return employees;
+}
+
+/** The code HR knows an employee by: `EMP-00001` for number 1 with the default prefix. */
+export function formatEmployeeCode(prefix: string, number: number): string {
+  return `${prefix}-${String(number).padStart(5, '0')}`;
 }
 
 function generateOne(
