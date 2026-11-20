@@ -61,7 +61,7 @@ sequenceDiagram
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`, `salary_records`. Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
 
 ```mermaid
 erDiagram
@@ -104,7 +104,7 @@ erDiagram
     date effective_from
     string reason "HIRE, PROMOTION, MERIT, MARKET_ADJUSTMENT or CORRECTION; null when an import gives none"
     uuid changed_by FK "null when loaded by the seed"
-    uuid import_id FK "null unless an import created it"
+    uuid import_id FK "added with the imports table; null unless an import created it"
     timestamp created_at
   }
   SALARY_BAND {
@@ -151,7 +151,9 @@ erDiagram
 
 Notes:
 
-- `SALARY_RECORD` is append-only. The current salary is the latest record with `effective_from <= today`, with ties going to the newest `created_at`, so a correction can share the date of the record it fixes. This is what makes every change auditable and growth computable (F3, F9). An import appends a record only when the amount differs from the current one (F6). The columns shown here are the current proposal, not yet reviewed or built.
+- `SALARY_RECORD` is append-only. The current salary is the latest record with `effective_from <= today`, with ties going to the newest `created_at`, so a correction can share the date of the record it fixes. This is what makes every change auditable and growth computable (F3, F9). An import appends a record only when the amount differs from the current one (F6).
+- **`salary_records` is built**, without `import_id`: that column is added, nullable, when the `imports` table is designed (M6), which is an additive change with no data migration. The other choices: `annual_amount` is an annual gross figure (monthly is that divided by 12), `numeric(14,2)`; `currency_code` is stored on every record, so a person who later moves country does not silently change what their history means; `reason` is optional because a spreadsheet rarely says why a salary changed (the API requires one for a change made in the app); `changed_by` is null only for records the seed loaded, and a user who changed a salary cannot be deleted, so the audit trail survives; and nothing is unique on `(employee_id, effective_from)`, so a correction can share a date.
+- **Append-only is a rule of the code, not of the database.** The repository for this table will offer inserts and reads, never update or delete; enforcing it in Postgres would need a trigger, which is hand-written SQL, and can be added if that proves not to be enough. `annual_amount > 0` is validated by the API for the same reason. No secondary indexes yet; the likely first one is `(employee_id, effective_from DESC)`, added after salary history is seeded and the query plans show a need.
 - `IMPORT` is what makes uploads traceable: each import records who uploaded it, its outcome counts and whether it was applied, and the salary records it created point back to it. Its exact columns are settled when the table is designed.
 - All money columns are `NUMERIC` (Prisma `Decimal`), never floating point.
 - `FX_RATE` is a dated table, not tied to a country by foreign key: a country's `currency_code` selects the rate row in force on a given date, so USD comparisons are reproducible.

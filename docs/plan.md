@@ -17,7 +17,7 @@
 | M0 | Foundations: requirements, tech stack, Nest scaffold, Neon + Prisma connection, health endpoints | all | done |
 | M1 | Data model foundations: `users`, `countries`, `departments` | all | done |
 | M2 | Auth: login, refresh-token rotation, logout, JWT and `HR_ADMIN` role guards, `GET /auth/me`, login rate limit | §3 | done. No admin seed: the author creates the HR manager by hand (steps in `backend/README.md`) |
-| M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | in progress: `employees` table and the 10,000-employee seed (`npm run seed`) done; `salary_records` next (columns reviewed first), then salary history in the seed and the directory |
+| M3 | `employees` and `salary_records` tables, the 10,000-employee seed (realistic pay by country, level, department), employee directory with search, filters, pagination (backend) | F1, F2 | in progress: `employees` table and the 10,000-employee seed (`npm run seed`) done; `salary_records` table done (columns reviewed first); next: salary history in the seed (a hire record per person, then raises) and the directory |
 | M4 | Employee profile and salary changes, `salary_bands`, add/edit/terminate | F3, F4 | planned |
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
 | M6 | Import from Excel/CSV (template, validation preview, repeatable commit, an `imports` table so every change traces to its upload), export, bulk salary change | F6, F7, F8 | planned |
