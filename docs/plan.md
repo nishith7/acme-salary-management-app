@@ -22,8 +22,8 @@
 | M5 | Pay insights with the privacy threshold (groups under 5 hidden) | F5 | planned |
 | M6 | Import from Excel/CSV (template, validation preview, repeatable commit, an `imports` table so every change traces to its upload), export, bulk salary change | F6, F7, F8 | planned |
 | M7 | CI pipeline and quality tooling (Husky, lint-staged, commitlint, GitHub Actions) | quality | planned |
-| M8 | Frontend: directory, profile, insights, import | F1–F8 UI | planned |
-| M9 | Deploy (Neon, Render, Vercel), demo video, README polish. Deploy checklist: set `JWT_SECRET`, set `TRUST_PROXY` and verify it with the two-network check in `backend/README.md`, confirm the Vercel `/api/*` proxy keeps the refresh cookie first-party | readiness | planned |
+| M8 | Frontend: directory, profile, insights, import | F1–F8 UI | started early (the author chose to begin the frontend before finishing M4-M6): `frontend/` toolchain done (React 19, Vite 8, Vitest, Oxlint, Prettier), a CI workflow and a manual GitHub Pages deploy workflow; UI library chosen by the author: Material UI (`tech-stack.md` decision 15); next: install it, decide the table component (MUI X DataGrid or plain Table), then login and the directory |
+| M9 | Deploy (Neon, Render, Vercel), demo video, README polish. Deploy checklist: set `JWT_SECRET`, set `TRUST_PROXY` and verify it with the two-network check in `backend/README.md`, confirm the Vercel `/api/*` proxy keeps the refresh cookie first-party, **and make the refresh cookie's path match the proxied path**: the API sets `Path=/auth`, so behind `/api/*` the browser never sends it to `/api/auth/refresh` (the Vite dev proxy already rewrites it; production needs a configurable path in the API, or a host that can rewrite cookies). GitHub Pages cannot proxy, so there the cookie would be third-party | readiness | planned |
 | M10 | Stretch, if time: increment tracking. F8 (bulk salary change) is the first thing cut from M6 | F9 | cut first |
 
 ## 3. Design notes

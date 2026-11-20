@@ -7,7 +7,7 @@ Instructions for AI coding tools working in this repo. Read [docs/requirements.m
 ACME Salary Management: web app for an HR Manager to maintain auditable salary data for ~10,000 employees (loaded from the existing spreadsheets, then kept up to date in the app) and answer pay questions. It is a system of record, not payroll: no payouts, pay status or payslips (see requirements §4).
 
 - `backend/` NestJS 12 (ESM) + Prisma 7 + PostgreSQL (Neon)
-- `frontend/` React + Vite (not created yet)
+- `frontend/` React 19 + Vite 8 + TypeScript (toolchain only so far; the UI library is Material UI, see `docs/tech-stack.md` decision 15)
 - `docs/` requirements, architecture, plan, tech stack, performance, AI log
 
 Plan and status: [docs/plan.md](docs/plan.md). Design: [docs/architecture.md](docs/architecture.md).
@@ -27,6 +27,8 @@ Plan and status: [docs/plan.md](docs/plan.md). Design: [docs/architecture.md](do
 | `npm run build` | compile |
 
 Before every commit: `npm run lint && npm test && npm run build` must pass.
+
+Frontend (run from `frontend/`): `npm run dev`, `npm test`, `npm run lint`, `npm run format:check`, `npm run build` (type check, then bundle). Before a frontend commit: `npm run lint && npm run format:check && npm test && npm run build`. CI (`.github/workflows/frontend-ci.yml`) runs the same four. In development Vite proxies `/api/*` to the backend and rewrites the refresh cookie's path from `/auth` to `/api/auth`; the API itself has no setting for that path yet.
 
 ## Code rules
 
