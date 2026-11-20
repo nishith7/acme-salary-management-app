@@ -7,7 +7,7 @@ Instructions for AI coding tools working in this repo. Read [docs/requirements.m
 ACME Salary Management: web app for an HR Manager to maintain auditable salary data for ~10,000 employees (loaded from the existing spreadsheets, then kept up to date in the app) and answer pay questions. It is a system of record, not payroll: no payouts, pay status or payslips (see requirements §4).
 
 - `backend/` NestJS 12 (ESM) + Prisma 7 + PostgreSQL (Neon)
-- `frontend/` React 19 + Vite 8 + TypeScript (toolchain only so far; the UI library is Material UI, see `docs/tech-stack.md` decision 15)
+- `frontend/` React 19 + Vite 8 + TypeScript + Material UI (API client, theme, sign-in and protected routes built; the directory is next; layout in `frontend/README.md`, decisions 15 to 17 in `docs/tech-stack.md`)
 - `docs/` requirements, architecture, plan, tech stack, performance, AI log
 
 Plan and status: [docs/plan.md](docs/plan.md). Design: [docs/architecture.md](docs/architecture.md).
@@ -44,6 +44,7 @@ Frontend (run from `frontend/`): `npm run dev`, `npm test`, `npm run lint`, `npm
 - Never return a database row such as `User` from an endpoint. Map it to the response schema, so `passwordHash` and similar fields cannot leak.
 - Every route needs a valid access token by default (global `JwtAuthGuard`). Opt out only with `@Public()`, with a comment saying why. A route without `@Roles` is open to any signed-in user, so **every HR controller carries `@Roles('HR_ADMIN')` at class level**, and its e2e tests must show an `EMPLOYEE` token gets 403. Add `@ApiBearerAuth()` and `@ApiUnauthorizedResponse` to protected controllers so Swagger sends the token. Take the user from `@CurrentUser()`, never from the request body or URL.
 - Rate limiting is opt-in per route: add `@UseGuards(ThrottlerGuard)` (only login has it). The throttler in `AuthModule` must stay named `default`, or it sends a `Retry-After-<name>` header no client understands; a new limited route gives itself its own `@Throttle(...)` values. The limit counts by `req.ip`, so it is only correct with `TRUST_PROXY` set to the real number of proxies (see `backend/README.md`).
+- **Frontend** (details in `frontend/README.md`): colours, fonts and component defaults live only in `src/theme/`, and screens use theme tokens, never hard-coded hex values (check text contrast against WCAG AA when adding a colour). A new screen goes in `src/features/<name>/pages/` with its route inside `RequireAuth` in `src/app/routes.tsx`, and paths come from `src/app/paths.ts`. The access token lives only in memory (`src/api/client.ts`), never in `localStorage` or `sessionStorage`, and the query cache is cleared when a session ends. The browser guard is a courtesy: the server enforces access. Frontend tests only where they catch real risk (the refresh logic, the route guards, the request-body mapping), driven through the real route table with `renderApp` (`src/test/render-app.tsx`).
 - App-wide setup (cookie parser, the validation pipe, Swagger; prefixes later) lives in `src/app.setup.ts` as `configureApp`, used by both `main.ts` and the e2e tests.
 
 ## Testing rules
