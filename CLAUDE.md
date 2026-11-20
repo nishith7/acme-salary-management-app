@@ -22,7 +22,7 @@ Plan and status: [docs/plan.md](docs/plan.md). Design: [docs/architecture.md](do
 | `npm run test:integration` | tests against the real database (needs a migrated `DATABASE_URL`) |
 | `npm run prisma:migrate` | create (and apply) a migration in development; add `-- --create-only --name <name>` to only generate it |
 | `npm run prisma:deploy` | apply existing migrations |
-| `npm run seed` | build, then load the reference data and 10,000 synthetic employees (idempotent; `-- --count=500` for fewer; uses `DIRECT_URL`) |
+| `npm run seed` | build, then load the reference data, 10,000 synthetic employees and their salary history, about 59,000 records (idempotent; `-- --count=500` for fewer; uses `DIRECT_URL`) |
 | `npm run lint` | oxlint |
 | `npm run build` | compile |
 
@@ -63,6 +63,7 @@ Before every commit: `npm run lint && npm test && npm run build` must pass.
 ## Database and dependencies
 
 - **Seed data** lives in `src/seed/`. `generateEmployees` is pure and deterministic (faker with a fixed seed; "today" is the fixed `SEED_AS_OF`, never the clock); `seedEmployees` stores it and only ever inserts, never updates or deletes, so it is safe to re-run. `@faker-js/faker` is pinned to an exact version on purpose: its output for a given seed can change between versions, which would change the dataset, so do not bump it casually. Asking for more employees must not change the earlier ones (a test enforces it).
+- **Salary history** (`generateSalaryHistory` in `src/seed/salary-generator.ts`, stored by `seedSalaryHistory`) is also pure and deterministic, and is made from the pay model in `src/seed/pay-model.ts`. It must NOT draw from the employee generator's random stream: each employee has their own source keyed by `<seed>:<employee code>` (`src/seed/random.ts`), so history depends only on that employee's stored row. `seedSalaryHistory` reads stored employees, inserts only for those in the numbered `EMP-` set that have no salary record, and never updates or deletes, so it cannot invent pay for an employee created later. The pay model's exchange rates are fixed on purpose and must load unchanged into `fx_rates`; band width is `BAND_HALF_WIDTH` (15%).
 
 - `DATABASE_URL` is the pooled Neon URL (API runtime); `DIRECT_URL` is the direct URL (migrations, seed). Never print either.
 - Prisma CLI, client and adapter are pinned to exactly **7.10.1**. npm's `latest` tag is a release candidate; always pin.
