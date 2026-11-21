@@ -51,6 +51,9 @@ export interface EmployeeQuery {
   pageSize?: number;
 }
 
+/** The body of `QUERY /employees/export`: the list's filters and sort, with no paging (everyone who matches). */
+export type EmployeeExportQuery = Omit<EmployeeQuery, 'page' | 'pageSize'>;
+
 export interface EmployeeListItem {
   id: string;
   employeeCode: string;
@@ -114,6 +117,16 @@ export interface EmployeeProfile extends EmployeeListItem {
   salaryHistory: SalaryHistoryEntry[];
 }
 
+/** The body of `POST /employees/:id/salary-changes`. The currency is not sent: the API uses the one in force. */
+export interface SalaryChangeRequest {
+  /** A decimal string, for example "52000.50": never a number, so nothing is rounded. */
+  annualAmount: string;
+  /** YYYY-MM-DD; not before the joining date; a future date schedules the change. */
+  effectiveFrom: string;
+  /** HIRE only for a person with no salary yet; one of the other four for any later change. */
+  reason: SalaryChangeReason;
+}
+
 export interface EmployeeListResponse {
   items: EmployeeListItem[];
   page: number;
@@ -141,12 +154,48 @@ export function createEmployeesApi(client: ApiClient) {
       return data;
     },
 
+    /**
+     * Everyone who matches the filters as a CSV file, ready to save. The API sends the whole
+     * directory in one response (about 1.3 MB for 10,000 people).
+     */
+    async exportCsv(
+      query: EmployeeExportQuery,
+      signal?: AbortSignal,
+    ): Promise<Blob> {
+      const { data } = await client.http.request<Blob>({
+        method: 'QUERY',
+        url: '/employees/export',
+        data: query,
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'blob',
+        signal,
+      });
+      return data;
+    },
+
     /** One employee with their salary history. Rejects with a 404 `ApiError` if there is no such employee. */
     async get(id: string, signal?: AbortSignal): Promise<EmployeeProfile> {
       const { data } = await client.http.request<EmployeeProfile>({
         method: 'GET',
         url: `/employees/${encodeURIComponent(id)}`,
         signal,
+      });
+      return data;
+    },
+
+    /**
+     * Adds a salary to the employee's history and returns the updated profile. Rejects with
+     * an `ApiError`: 400 (invalid, or a date before the joining date), 404 (no such
+     * employee) or 409 (the employee has left).
+     */
+    async addSalaryChange(
+      id: string,
+      request: SalaryChangeRequest,
+    ): Promise<EmployeeProfile> {
+      const { data } = await client.http.request<EmployeeProfile>({
+        method: 'POST',
+        url: `/employees/${encodeURIComponent(id)}/salary-changes`,
+        data: request,
       });
       return data;
     },

@@ -4,6 +4,7 @@ import { RequireAuth } from '../features/auth/RequireAuth.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
 import { DirectoryPage } from '../features/directory/pages/DirectoryPage.tsx';
 import { EmployeeProfilePage } from '../features/directory/pages/EmployeeProfilePage.tsx';
+import { SalaryUpdatesPage } from '../features/salary-updates/pages/SalaryUpdatesPage.tsx';
 import { AppShell } from '../layouts/AppShell.tsx';
 import { NotFoundPage } from '../pages/NotFoundPage.tsx';
 import { paths } from './paths.ts';
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
         element: <AppShell />,
         children: [
           { index: true, element: <Navigate to={paths.employees} replace /> },
+          { path: paths.salaryUpdates, element: <SalaryUpdatesPage /> },
           {
             path: paths.employees,
             element: <DirectoryPage />,

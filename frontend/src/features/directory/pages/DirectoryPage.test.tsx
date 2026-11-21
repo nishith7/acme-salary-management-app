@@ -1,8 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authApi, employeesApi } from '../../../api/index.ts';
+import { ApiError, authApi, employeesApi } from '../../../api/index.ts';
+import { saveBlob } from '../../../lib/save-file.ts';
 import { renderApp } from '../../../test/render-app.tsx';
+
+// Saving a file is the browser's job; the tests only need to know it was asked to.
+vi.mock('../../../lib/save-file.ts', () => ({ saveBlob: vi.fn() }));
 
 /** The last body the page sent to `QUERY /employees`. */
 function lastQuery(list: ReturnType<typeof vi.spyOn>) {
@@ -140,5 +144,52 @@ describe('filtering the directory', () => {
         pageSize: 25,
       }),
     );
+  });
+});
+
+describe('exporting the directory', () => {
+  it('exports everyone who matches the current filters and sort, not the page on screen, and saves the file', async () => {
+    const file = new Blob(['Employee ID\r\n'], { type: 'text/csv' });
+    const exportCsv = vi
+      .spyOn(employeesApi, 'exportCsv')
+      .mockResolvedValue(file);
+    const user = userEvent.setup();
+    await openDirectory();
+    await choose(user, 'Country', 'India');
+    await user.click(screen.getByRole('button', { name: 'Left' }));
+    await waitFor(() =>
+      expect(lastQuery(list)).toMatchObject({ statuses: ['TERMINATED'] }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledOnce());
+    // The filters and the sort, and no page or page size: an export is not one page.
+    expect(exportCsv).toHaveBeenCalledExactlyOnceWith({
+      countries: ['IN'],
+      statuses: ['TERMINATED'],
+      sortBy: 'fullName',
+      sortOrder: 'asc',
+    });
+    expect(saveBlob).toHaveBeenCalledWith(
+      file,
+      expect.stringMatching(/^employees-\d{4}-\d{2}-\d{2}\.csv$/) as string,
+    );
+  });
+
+  it('says so, and saves nothing, when the export fails', async () => {
+    vi.mocked(saveBlob).mockClear();
+    vi.spyOn(employeesApi, 'exportCsv').mockRejectedValue(
+      new ApiError(500, 'Internal server error'),
+    );
+    const user = userEvent.setup();
+    await openDirectory();
+
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not export',
+    );
+    expect(saveBlob).not.toHaveBeenCalled();
   });
 });

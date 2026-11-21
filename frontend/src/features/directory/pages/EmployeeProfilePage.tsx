@@ -5,13 +5,15 @@ import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
 import Skeleton from '@mui/material/Skeleton';
+import Snackbar from '@mui/material/Snackbar';
 import Typography from '@mui/material/Typography';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import type { EmployeeProfile } from '../../../api/employees.ts';
 import { ApiError } from '../../../api/index.ts';
 import { paths } from '../../../app/paths.ts';
-import { CloseIcon } from '../../../components/icons.tsx';
+import { CloseIcon, EditIcon } from '../../../components/icons.tsx';
+import { SalaryChangeDialog } from '../components/SalaryChangeDialog.tsx';
 import { SalaryHistory } from '../components/SalaryHistory.tsx';
 import { formatDate, formatMoney, formatUsd } from '../format.ts';
 import { useEmployee } from '../use-employee.ts';
@@ -83,6 +85,8 @@ export function EmployeeProfilePage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const employee = useEmployee(id);
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Opened from the directory: closing steps back, so the Back button does not bring the
   // profile back. Opened from a link or a reload (nothing earlier in this app): go to the
@@ -100,80 +104,128 @@ export function EmployeeProfilePage() {
   const title = employee.data?.fullName ?? 'Employee';
 
   return (
-    <Drawer
-      anchor="right"
-      open
-      onClose={close}
-      slotProps={{
-        paper: {
-          role: 'dialog',
-          'aria-modal': true,
-          'aria-labelledby': 'employee-profile-title',
-          sx: { width: { xs: '100%', sm: 480 }, display: 'flex' },
-        },
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 3 }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h2" id="employee-profile-title">
-            {title}
-          </Typography>
-          {employee.data && (
-            <Typography color="text.secondary">
-              {employee.data.employeeCode}
+    <>
+      <Drawer
+        anchor="right"
+        open
+        onClose={close}
+        slotProps={{
+          paper: {
+            role: 'dialog',
+            'aria-modal': true,
+            'aria-labelledby': 'employee-profile-title',
+            sx: { width: { xs: '100%', sm: 480 }, display: 'flex' },
+          },
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 3 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h2" id="employee-profile-title">
+              {title}
             </Typography>
+            {employee.data && (
+              <Typography color="text.secondary">
+                {employee.data.employeeCode}
+              </Typography>
+            )}
+          </Box>
+          <IconButton aria-label="Close" edge="end" onClick={close}>
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <Divider />
+
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: 3 }}>
+          {employee.isPending ? (
+            <Loading />
+          ) : notFound ? (
+            <Alert severity="warning">
+              This employee does not exist. They may have been removed.
+            </Alert>
+          ) : employee.isError ? (
+            <Alert
+              severity="error"
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => void employee.refetch()}
+                >
+                  Try again
+                </Button>
+              }
+            >
+              Could not load this employee.{' '}
+              {employee.error instanceof ApiError ? employee.error.message : ''}
+            </Alert>
+          ) : (
+            <>
+              <Details employee={employee.data} />
+              <Typography
+                variant="overline"
+                component="h3"
+                sx={{ mt: 4, mb: 0.5 }}
+              >
+                Salary history
+              </Typography>
+              <SalaryHistory entries={employee.data.salaryHistory} />
+            </>
           )}
         </Box>
-        <IconButton aria-label="Close" edge="end" onClick={close}>
-          <CloseIcon />
-        </IconButton>
-      </Box>
-      <Divider />
 
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: 3 }}>
-        {employee.isPending ? (
-          <Loading />
-        ) : notFound ? (
-          <Alert severity="warning">
-            This employee does not exist. They may have been removed.
-          </Alert>
-        ) : employee.isError ? (
-          <Alert
-            severity="error"
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => void employee.refetch()}
-              >
-                Try again
-              </Button>
-            }
-          >
-            Could not load this employee.{' '}
-            {employee.error instanceof ApiError ? employee.error.message : ''}
-          </Alert>
-        ) : (
-          <>
-            <Details employee={employee.data} />
+        <Divider />
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 1.5,
+            p: 2,
+          }}
+        >
+          {employee.data?.status === 'TERMINATED' && (
             <Typography
-              variant="overline"
-              component="h3"
-              sx={{ mt: 4, mb: 0.5 }}
+              variant="caption"
+              color="text.secondary"
+              sx={{ mr: 'auto' }}
             >
-              Salary history
+              No salary changes for people who have left.
             </Typography>
-            <SalaryHistory entries={employee.data.salaryHistory} />
-          </>
-        )}
-      </Box>
-
-      <Divider />
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, p: 2 }}>
-        <Button variant="outlined" color="secondary" onClick={close}>
-          Close
-        </Button>
-      </Box>
-    </Drawer>
+          )}
+          <Button variant="outlined" color="secondary" onClick={close}>
+            Close
+          </Button>
+          {employee.data && employee.data.status === 'ACTIVE' && (
+            <Button
+              variant="contained"
+              startIcon={<EditIcon />}
+              onClick={() => setEditing(true)}
+            >
+              Edit salary
+            </Button>
+          )}
+        </Box>
+      </Drawer>
+      {editing && employee.data && (
+        <SalaryChangeDialog
+          employee={employee.data}
+          onClose={() => setEditing(false)}
+          onSaved={() => setSaved(true)}
+        />
+      )}
+      <Snackbar
+        open={saved}
+        autoHideDuration={6000}
+        onClose={() => setSaved(false)}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSaved(false)}
+        >
+          Salary saved. It is now in the history.
+        </Alert>
+      </Snackbar>
+    </>
   );
 }

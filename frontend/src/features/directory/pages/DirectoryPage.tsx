@@ -1,9 +1,13 @@
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Snackbar from '@mui/material/Snackbar';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router';
+import { Link as RouterLink, Outlet, useNavigate } from 'react-router';
 import { ApiError } from '../../../api/index.ts';
 import { paths } from '../../../app/paths.ts';
+import { DownloadIcon, UploadIcon } from '../../../components/icons.tsx';
 import { DirectoryFilters } from '../components/DirectoryFilters.tsx';
 import {
   EmployeeTable,
@@ -17,6 +21,7 @@ import {
   type DirectoryFilters as Filters,
 } from '../filters.ts';
 import { useEmployees } from '../use-employees.ts';
+import { useExportEmployees } from '../use-export-employees.ts';
 
 const countFormat = new Intl.NumberFormat('en-US');
 
@@ -36,6 +41,11 @@ export function DirectoryPage() {
     ...pagination,
     ...sort,
   });
+
+  const exporting = useExportEmployees();
+  // The file is the screen, minus the paging: the same filters and the same sort, everyone.
+  const exportCurrentView = () =>
+    exporting.mutate({ ...toEmployeeFilterQuery(filters), ...sort });
 
   function handleSortChange(next: TableSort) {
     setSort(next);
@@ -73,18 +83,38 @@ export function DirectoryPage() {
           gap: 2,
         }}
       >
-        <Box>
-          <Typography variant="h1">Employees</Typography>
-          <Typography
-            color="text.secondary"
-            sx={{ mt: 0.5, minHeight: '1.5em' }}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h1">Employees</Typography>
+            <Typography
+              color="text.secondary"
+              sx={{ mt: 0.5, minHeight: '1.5em' }}
+            >
+              {total === null
+                ? ''
+                : hasActiveFilters(filters)
+                  ? `${total} matching`
+                  : `${total} people`}
+            </Typography>
+          </Box>
+          <Button
+            component={RouterLink}
+            to={paths.salaryUpdates}
+            variant="outlined"
+            color="secondary"
+            startIcon={<UploadIcon />}
           >
-            {total === null
-              ? ''
-              : hasActiveFilters(filters)
-                ? `${total} matching`
-                : `${total} people`}
-          </Typography>
+            Bulk update
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<DownloadIcon />}
+            loading={exporting.isPending}
+            onClick={exportCurrentView}
+          >
+            Export CSV
+          </Button>
         </Box>
         <DirectoryFilters filters={filters} onChange={handleFiltersChange} />
         <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -104,6 +134,19 @@ export function DirectoryPage() {
       </Box>
       {/* The open profile, if the address names one (see routes.tsx). */}
       <Outlet />
+      <Snackbar
+        open={exporting.isError}
+        autoHideDuration={8000}
+        onClose={() => exporting.reset()}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => exporting.reset()}
+        >
+          Could not export the employees. Check your connection and try again.
+        </Alert>
+      </Snackbar>
     </>
   );
 }

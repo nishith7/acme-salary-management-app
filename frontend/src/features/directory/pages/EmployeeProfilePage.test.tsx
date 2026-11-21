@@ -202,3 +202,117 @@ describe('an employee profile', () => {
     );
   });
 });
+
+describe('editing a salary from the profile', () => {
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit salary' }),
+    );
+    return within(await screen.findByRole('dialog', { name: /edit salary/i }));
+  };
+
+  it('saves the amount as the text typed, then shows the new step in the history', async () => {
+    const saved: EmployeeProfile = {
+      ...profile,
+      salaryHistory: [
+        {
+          id: 'h4',
+          annualAmount: '52000.50',
+          currencyCode: 'GBP',
+          effectiveFrom: '2026-11-21',
+          reason: 'MARKET_ADJUSTMENT',
+          changedBy: 'Hana Rao',
+          previous: { annualAmount: '48700.00', currencyCode: 'GBP' },
+          changePercent: '6.8',
+          state: 'CURRENT',
+        },
+        ...profile.salaryHistory,
+      ],
+    };
+    const addSalaryChange = vi
+      .spyOn(employeesApi, 'addSalaryChange')
+      .mockResolvedValue(saved);
+    const user = userEvent.setup();
+    renderApp(paths.employee(id));
+
+    const dialog = await openDialog(user);
+    await user.type(dialog.getByLabelText('New annual salary'), '52000.50');
+    // What will be saved is read back, so a misplaced decimal point shows before saving.
+    expect(
+      await dialog.findByText(/will be recorded as £52,000\.50/i),
+    ).toBeInTheDocument();
+    await user.click(dialog.getByRole('combobox', { name: 'Reason' }));
+    await user.click(
+      await screen.findByRole('option', { name: 'Market adjustment' }),
+    );
+    await user.click(dialog.getByRole('button', { name: 'Save salary' }));
+
+    await waitFor(() =>
+      expect(addSalaryChange).toHaveBeenCalledExactlyOnceWith(id, {
+        annualAmount: '52000.50',
+        effectiveFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as string,
+        reason: 'MARKET_ADJUSTMENT',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /edit salary/i })).toBeNull(),
+    );
+    expect(await screen.findByText(/salary saved/i)).toBeInTheDocument();
+    const steps = within(await openProfile()).getAllByRole('listitem');
+    expect(steps).toHaveLength(4);
+    expect(steps[0]).toHaveTextContent('Market adjustment');
+    expect(steps[0]).toHaveTextContent('by Hana Rao');
+  });
+
+  it('points out an amount the API would refuse, and sends nothing', async () => {
+    const addSalaryChange = vi.spyOn(employeesApi, 'addSalaryChange');
+    const user = userEvent.setup();
+    renderApp(paths.employee(id));
+
+    const dialog = await openDialog(user);
+    await user.type(dialog.getByLabelText('New annual salary'), '52,000');
+    await user.click(dialog.getByRole('button', { name: 'Save salary' }));
+
+    expect(dialog.getByText(/use digits only/i)).toBeInTheDocument();
+    // The reason was not chosen either.
+    expect(dialog.getByText(/choose why/i)).toBeInTheDocument();
+    expect(addSalaryChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the form open, with the API’s reason, when the API refuses', async () => {
+    vi.spyOn(employeesApi, 'addSalaryChange').mockRejectedValue(
+      new ApiError(
+        400,
+        'The effective date cannot be before the joining date (2023-11-20).',
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp(paths.employee(id));
+
+    const dialog = await openDialog(user);
+    await user.type(dialog.getByLabelText('New annual salary'), '52000');
+    await user.click(dialog.getByRole('combobox', { name: 'Reason' }));
+    await user.click(await screen.findByRole('option', { name: 'Correction' }));
+    await user.click(dialog.getByRole('button', { name: 'Save salary' }));
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'before the joining date',
+    );
+    expect(dialog.getByRole('button', { name: 'Save salary' })).toBeEnabled();
+  });
+
+  it('offers no way to change the salary of someone who has left', async () => {
+    vi.spyOn(employeesApi, 'get').mockResolvedValue({
+      ...profile,
+      status: 'TERMINATED',
+      terminatedOn: '2026-03-31',
+    });
+
+    renderApp(paths.employee(id));
+
+    expect(
+      await screen.findByText(/no salary changes for people who have left/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit salary' })).toBeNull();
+  });
+});
