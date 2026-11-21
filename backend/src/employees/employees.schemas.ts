@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { EmployeeStatus } from '../generated/prisma/enums.js';
+import {
+  EmployeeStatus,
+  SalaryChangeReason,
+} from '../generated/prisma/enums.js';
 
 /**
  * Request and response shapes for the employee directory. Each schema is the
@@ -139,6 +142,47 @@ export const employeeSchema = z.object({
 });
 export type EmployeeListItem = z.infer<typeof employeeSchema>;
 
+export const salaryHistoryEntrySchema = z.object({
+  id: z.uuid(),
+  annualAmount: z
+    .string()
+    .describe(
+      'Annual gross, in `currencyCode`. A decimal string, never a float.',
+    ),
+  currencyCode: z.string(),
+  effectiveFrom: z.string().describe('YYYY-MM-DD'),
+  reason: z
+    .enum(SalaryChangeReason)
+    .nullable()
+    .describe(
+      'Why it changed. Null for a salary loaded without a reason, for example from a spreadsheet.',
+    ),
+  changedBy: z
+    .string()
+    .nullable()
+    .describe(
+      'Name of the user who recorded it; null when the seed loaded it.',
+    ),
+  previous: z
+    .object({ annualAmount: z.string(), currencyCode: z.string() })
+    .nullable()
+    .describe('The salary before this one in time; null for the first.'),
+  changePercent: z
+    .string()
+    .nullable()
+    .describe(
+      'The change from `previous` as a percentage with one decimal, for example "8.1" or "-2.5". Null for the first salary, and when the currency changed (a percentage would mean nothing).',
+    ),
+  state: z
+    .enum(['CURRENT', 'PAST', 'SCHEDULED'])
+    .describe(
+      '`CURRENT` is the salary in force today, `SCHEDULED` starts after today, `PAST` was replaced.',
+    ),
+});
+export type SalaryHistoryEntry = z.infer<typeof salaryHistoryEntrySchema>;
+
+export const employeeIdSchema = z.uuid();
+
 export const filterOptionsResponseSchema = z.object({
   countries: z
     .array(z.object({ code: z.string(), name: z.string() }))
@@ -148,6 +192,15 @@ export const filterOptionsResponseSchema = z.object({
     .describe('Every department, by name. Send it as a `departments` filter.'),
 });
 export type FilterOptionsResponse = z.infer<typeof filterOptionsResponseSchema>;
+
+export const employeeProfileSchema = employeeSchema.extend({
+  salaryHistory: z
+    .array(salaryHistoryEntrySchema)
+    .describe(
+      'Every salary the employee has been on, newest first (the same order that picks the salary in force).',
+    ),
+});
+export type EmployeeProfile = z.infer<typeof employeeProfileSchema>;
 
 export const employeeListResponseSchema = z.object({
   items: z.array(employeeSchema),

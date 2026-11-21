@@ -150,3 +150,162 @@ describe('GET /employees/filter-options (e2e)', () => {
     });
   });
 });
+
+/** One employee: the directory row plus the whole salary history. */
+describe('GET /employees/:id (e2e)', () => {
+  const jwt = new JwtService({ secret: TEST_JWT_SECRET });
+  const id = '5b1c6d0a-8f3e-4c52-9a1e-2d7f4b6a9c10';
+  let testApp: TestApp;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    testApp = await createTestApp();
+    const server = testApp.app.getHttpServer() as unknown as Server;
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(() => {
+    testApp.queryRaw.mockReset().mockResolvedValue([]);
+  });
+
+  const get = async (path: string, role?: 'HR_ADMIN' | 'EMPLOYEE') =>
+    fetch(`${baseUrl}/employees/${path}`, {
+      headers: role
+        ? {
+            authorization: `Bearer ${await jwt.signAsync(
+              { sub: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11', role },
+              { algorithm: 'HS256', expiresIn: 900 },
+            )}`,
+          }
+        : {},
+    });
+
+  it('refuses a request with no access token', async () => {
+    const response = await get(id);
+
+    expect(response.status).toBe(401);
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('refuses a user who is not an HR admin', async () => {
+    const response = await get(id, 'EMPLOYEE');
+
+    expect(response.status).toBe(403);
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('refuses an id that is not a UUID without touching the database', async () => {
+    const response = await get('not-an-id', 'HR_ADMIN');
+
+    expect(response.status).toBe(400);
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 for an employee that does not exist', async () => {
+    const response = await get(id, 'HR_ADMIN');
+
+    expect(response.status).toBe(404);
+  });
+
+  it('gives an HR admin the employee with the salary history, newest first, each step with what it changed', async () => {
+    testApp.queryRaw
+      .mockResolvedValueOnce([
+        {
+          id,
+          employeeCode: 'EMP-00001',
+          fullName: 'Asha Rao',
+          jobTitle: 'Engineer',
+          level: 3,
+          department: 'Engineering',
+          countryCode: 'IN',
+          countryName: 'India',
+          joiningDate: '2023-11-20',
+          status: 'ACTIVE',
+          terminatedOn: null,
+          tenureBand: '1-3',
+          annualAmount: '88000.00',
+          currencyCode: 'INR',
+          annualAmountUsd: '1055.00',
+          bandPosition: 'WITHIN',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          annualAmount: '88000.00',
+          currencyCode: 'INR',
+          effectiveFrom: '2024-11-20',
+          reason: 'MERIT',
+          changedByName: 'Hana Tester',
+          previousAmount: '80000.00',
+          previousCurrencyCode: 'INR',
+          changePercent: '10.0',
+          state: 'CURRENT',
+        },
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          annualAmount: '80000.00',
+          currencyCode: 'INR',
+          effectiveFrom: '2023-11-20',
+          reason: 'HIRE',
+          changedByName: null,
+          previousAmount: null,
+          previousCurrencyCode: null,
+          changePercent: null,
+          state: 'PAST',
+        },
+      ]);
+
+    const response = await get(id, 'HR_ADMIN');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id,
+      employeeCode: 'EMP-00001',
+      fullName: 'Asha Rao',
+      jobTitle: 'Engineer',
+      level: 3,
+      department: 'Engineering',
+      country: { code: 'IN', name: 'India' },
+      joiningDate: '2023-11-20',
+      status: 'ACTIVE',
+      terminatedOn: null,
+      tenureBand: '1-3',
+      currentSalary: {
+        annualAmount: '88000.00',
+        currencyCode: 'INR',
+        annualAmountUsd: '1055.00',
+      },
+      bandPosition: 'WITHIN',
+      salaryHistory: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          annualAmount: '88000.00',
+          currencyCode: 'INR',
+          effectiveFrom: '2024-11-20',
+          reason: 'MERIT',
+          changedBy: 'Hana Tester',
+          previous: { annualAmount: '80000.00', currencyCode: 'INR' },
+          changePercent: '10.0',
+          state: 'CURRENT',
+        },
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          annualAmount: '80000.00',
+          currencyCode: 'INR',
+          effectiveFrom: '2023-11-20',
+          reason: 'HIRE',
+          changedBy: null,
+          previous: null,
+          changePercent: null,
+          state: 'PAST',
+        },
+      ],
+    });
+  });
+});

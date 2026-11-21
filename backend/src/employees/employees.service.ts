@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import type { EmployeeRow } from './employees.repository.js';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { EmployeeRow, SalaryHistoryRow } from './employees.repository.js';
 import { EmployeesRepository } from './employees.repository.js';
 import type {
   EmployeeListItem,
   EmployeeListResponse,
+  EmployeeProfile,
   EmployeeQuery,
   FilterOptionsResponse,
+  SalaryHistoryEntry,
 } from './employees.schemas.js';
 
 @Injectable()
@@ -19,6 +21,19 @@ export class EmployeesService {
       countries,
       departments: departments.map((department) => department.name),
     };
+  }
+
+  /** One employee as the directory shows them, plus the whole salary history. */
+  async get(id: string): Promise<EmployeeProfile> {
+    const today = new Date();
+    const [row, history] = await Promise.all([
+      this.employees.findById(id, today),
+      this.employees.salaryHistory(id, today),
+    ]);
+    if (!row) {
+      throw new NotFoundException('Employee not found');
+    }
+    return { ...toListItem(row), salaryHistory: history.map(toHistoryEntry) };
   }
 
   /** One page of the directory, with the current salary as of today. */
@@ -55,5 +70,25 @@ function toListItem(row: EmployeeRow): EmployeeListItem {
             annualAmountUsd: row.annualAmountUsd,
           },
     bandPosition: row.bandPosition,
+  };
+}
+
+function toHistoryEntry(row: SalaryHistoryRow): SalaryHistoryEntry {
+  return {
+    id: row.id,
+    annualAmount: row.annualAmount,
+    currencyCode: row.currencyCode,
+    effectiveFrom: row.effectiveFrom,
+    reason: row.reason,
+    changedBy: row.changedByName,
+    previous:
+      row.previousAmount === null || row.previousCurrencyCode === null
+        ? null
+        : {
+            annualAmount: row.previousAmount,
+            currencyCode: row.previousCurrencyCode,
+          },
+    changePercent: row.changePercent,
+    state: row.state,
   };
 }

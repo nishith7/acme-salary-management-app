@@ -1,8 +1,9 @@
-import { Body, Controller, Get, QueryMethod } from '@nestjs/common';
+import { Body, Controller, Get, Param, QueryMethod } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiForbiddenResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -11,8 +12,11 @@ import {
 import { Roles } from '../auth/roles.decorator.js';
 import {
   type EmployeeListResponse,
+  type EmployeeProfile,
   type EmployeeQuery,
+  employeeIdSchema,
   employeeListResponseSchema,
+  employeeProfileSchema,
   employeeQuerySchema,
   type FilterOptionsResponse,
   filterOptionsResponseSchema,
@@ -43,6 +47,24 @@ export class EmployeesController {
   })
   filterOptions(): Promise<FilterOptionsResponse> {
     return this.employees.filterOptions();
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get one employee with their salary history',
+    description:
+      'The employee as the directory shows them (current salary in local currency and US dollars, pay band position) plus every salary they have been on, newest first. Each step carries the salary before it, the change as a percentage (not across a currency change), the reason, who recorded it and whether it is in force today, scheduled or replaced.',
+  })
+  @ApiOkResponse({
+    standardSchema: employeeProfileSchema,
+    description: 'The employee and their salary history.',
+  })
+  @ApiBadRequestResponse({ description: 'The id is not a UUID.' })
+  @ApiNotFoundResponse({ description: 'There is no employee with this id.' })
+  get(
+    @Param('id', { schema: employeeIdSchema }) id: string,
+  ): Promise<EmployeeProfile> {
+    return this.employees.get(id);
   }
 
   // The HTTP QUERY method: a safe, read-only request like GET, but the filters
