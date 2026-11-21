@@ -21,6 +21,8 @@ export default defineConfig({
       LOGIN_RATE_WINDOW_SECONDS: '60',
       // No site is allowed by default; the CORS spec sets its own list.
       CORS_ORIGINS: '',
+      // Strict is the default; the cross-site spec sets its own.
+      REFRESH_COOKIE_SAMESITE: 'strict',
     },
   },
 });

@@ -23,6 +23,7 @@ describe('validateEnv', () => {
       LOGIN_RATE_LIMIT: 5,
       LOGIN_RATE_WINDOW_SECONDS: 60,
       CORS_ORIGINS: [],
+      REFRESH_COOKIE_SAMESITE: 'strict',
     });
   });
 
@@ -182,6 +183,34 @@ describe('validateEnv', () => {
         expect(message).toContain(name);
         expect(message).not.toContain('definitely-not-a-number');
       });
+    });
+  });
+
+  describe('REFRESH_COOKIE_SAMESITE', () => {
+    it('is strict when not set or left blank', () => {
+      expect(validateEnv(valid).REFRESH_COOKIE_SAMESITE).toBe('strict');
+      expect(
+        validateEnv({ ...valid, REFRESH_COOKIE_SAMESITE: '' })
+          .REFRESH_COOKIE_SAMESITE,
+      ).toBe('strict');
+    });
+
+    it('accepts strict, lax and none, in any case', () => {
+      for (const value of ['strict', 'lax', 'none', 'None', ' LAX ']) {
+        expect(
+          validateEnv({ ...valid, REFRESH_COOKIE_SAMESITE: value })
+            .REFRESH_COOKIE_SAMESITE,
+        ).toBe(value.trim().toLowerCase());
+      }
+    });
+
+    it('refuses anything else, naming the variable and not echoing the value', () => {
+      const message = errorMessageOf(() =>
+        validateEnv({ ...valid, REFRESH_COOKIE_SAMESITE: 'sometimes-secret' }),
+      );
+
+      expect(message).toContain('REFRESH_COOKIE_SAMESITE');
+      expect(message).not.toContain('sometimes-secret');
     });
   });
 });

@@ -19,6 +19,17 @@ export interface Env {
    * cookie and browsers refuse a wildcard when cookies are involved.
    */
   CORS_ORIGINS: string[];
+  /**
+   * Whether the browser may send the refresh cookie on a request that comes from another
+   * site. `strict` (the default) never does, which is right when the site and the API share
+   * a site. When they do not (the site on github.io, the API on onrender.com), `strict` means
+   * the cookie is never sent, so every reload and every expiry of the 15-minute access token
+   * signs the user out; `none` fixes that. `none` works in Chrome, Edge and Firefox and not in
+   * Safari, which blocks third-party cookies. It also removes the cookie's own protection
+   * against other sites making the browser call the cookie endpoints, so those endpoints
+   * check the request's Origin against CORS_ORIGINS instead.
+   */
+  REFRESH_COOKIE_SAMESITE: 'strict' | 'lax' | 'none';
 }
 
 const POSTGRES_PROTOCOLS = new Set(['postgres:', 'postgresql:']);
@@ -80,7 +91,24 @@ export function validateEnv(config: Record<string, unknown>): Env {
       },
     ),
     CORS_ORIGINS: readOrigins(config, 'CORS_ORIGINS'),
+    REFRESH_COOKIE_SAMESITE: readSameSite(config, 'REFRESH_COOKIE_SAMESITE'),
   };
+}
+
+/** `strict`, `lax` or `none`, in any case. Missing or blank is `strict`. The message never echoes the value. */
+function readSameSite(
+  config: Record<string, unknown>,
+  name: string,
+): Env['REFRESH_COOKIE_SAMESITE'] {
+  const raw = config[name];
+  if (raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+    return 'strict';
+  }
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (value === 'strict' || value === 'lax' || value === 'none') {
+    return value;
+  }
+  throw new Error(`Invalid environment: ${name} must be strict, lax or none`);
 }
 
 /**

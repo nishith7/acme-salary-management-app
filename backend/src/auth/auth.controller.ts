@@ -33,6 +33,7 @@ import {
 } from './auth.schemas.js';
 import { AuthService, type SessionResult } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
+import { CookieOriginGuard } from './cookie-origin.guard.js';
 import { CurrentUser } from './current-user.decorator.js';
 import { Public } from './public.decorator.js';
 import {
@@ -83,6 +84,9 @@ export class AuthController {
   }
 
   @Public()
+  // The cookie can be sent from other sites (REFRESH_COOKIE_SAMESITE), so a request from a site
+  // that is not ours is refused before it touches the cookie.
+  @UseGuards(CookieOriginGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -118,6 +122,7 @@ export class AuthController {
   // Public on purpose: it reads the refresh cookie, so it works after the
   // access token has expired.
   @Public()
+  @UseGuards(CookieOriginGuard)
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
@@ -158,7 +163,10 @@ export class AuthController {
   private clearRefreshCookie(response: Response): void {
     response.clearCookie(
       REFRESH_COOKIE_NAME,
-      clearRefreshCookieOptions({ secure: this.useSecureCookies() }),
+      clearRefreshCookieOptions({
+        secure: this.useSecureCookies(),
+        sameSite: this.cookieSameSite(),
+      }),
     );
   }
 
@@ -173,9 +181,16 @@ export class AuthController {
       refreshCookieOptions({
         expiresAt: refreshToken.expiresAt,
         secure: this.useSecureCookies(),
+        sameSite: this.cookieSameSite(),
       }),
     );
     return session;
+  }
+
+  private cookieSameSite(): 'strict' | 'lax' | 'none' {
+    return this.config.getOrThrow<'strict' | 'lax' | 'none'>(
+      'REFRESH_COOKIE_SAMESITE',
+    );
   }
 
   private useSecureCookies(): boolean {

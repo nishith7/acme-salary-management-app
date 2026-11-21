@@ -23,6 +23,32 @@ describe('refresh cookie', () => {
     expect(options.path).toBe('/auth');
   });
 
+  it('can be allowed on cross-site requests, which is what a site on another host needs', () => {
+    const options = refreshCookieOptions({
+      expiresAt,
+      secure: true,
+      sameSite: 'none',
+    });
+
+    expect(options.sameSite).toBe('none');
+    expect(options.httpOnly).toBe(true);
+    expect(options.path).toBe('/auth');
+  });
+
+  it('is always HTTPS-only when cross-site, because a browser refuses SameSite=None without Secure', () => {
+    expect(
+      refreshCookieOptions({ expiresAt, secure: false, sameSite: 'none' })
+        .secure,
+    ).toBe(true);
+    expect(
+      clearRefreshCookieOptions({ secure: false, sameSite: 'none' }).secure,
+    ).toBe(true);
+    // And the clearing header uses the same flags as the one that set it, or the browser keeps the cookie.
+    expect(
+      clearRefreshCookieOptions({ secure: true, sameSite: 'none' }),
+    ).toEqual(expect.objectContaining({ sameSite: 'none', path: '/auth' }));
+  });
+
   it('expires when the refresh token does', () => {
     const options = refreshCookieOptions({ expiresAt, secure: false });
 

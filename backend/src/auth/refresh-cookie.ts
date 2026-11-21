@@ -1,4 +1,5 @@
 import type { CookieOptions, Request } from 'express';
+import type { Env } from '../config/env.validation.js';
 
 export const REFRESH_COOKIE_NAME = 'refresh_token';
 
@@ -9,16 +10,22 @@ export const REFRESH_COOKIE_NAME = 'refresh_token';
  */
 export const REFRESH_COOKIE_PATH = '/auth';
 
+type SameSite = Env['REFRESH_COOKIE_SAMESITE'];
+
 /**
- * Settings for the refresh-token cookie: unreadable by scripts (httpOnly), not
- * sent on cross-site requests (sameSite strict), and gone when the token
- * expires. `secure` limits it to HTTPS, which production must use.
+ * Settings for the refresh-token cookie: unreadable by scripts (httpOnly), by default not
+ * sent on cross-site requests (`sameSite` strict, see REFRESH_COOKIE_SAMESITE), and gone when
+ * the token expires. `secure` limits it to HTTPS, which production must use.
  */
 export function refreshCookieOptions(options: {
   expiresAt: Date;
   secure: boolean;
+  sameSite?: SameSite;
 }): CookieOptions {
-  return { ...cookieScope(options.secure), expires: options.expiresAt };
+  return {
+    ...cookieScope(options.secure, options.sameSite ?? 'strict'),
+    expires: options.expiresAt,
+  };
 }
 
 /**
@@ -40,15 +47,17 @@ export function readRefreshCookie(request: Request): string | undefined {
  */
 export function clearRefreshCookieOptions(options: {
   secure: boolean;
+  sameSite?: SameSite;
 }): CookieOptions {
-  return cookieScope(options.secure);
+  return cookieScope(options.secure, options.sameSite ?? 'strict');
 }
 
-function cookieScope(secure: boolean): CookieOptions {
+function cookieScope(secure: boolean, sameSite: SameSite): CookieOptions {
   return {
     httpOnly: true,
-    secure,
-    sameSite: 'strict',
+    // A browser refuses SameSite=None without Secure, so cross-site is always HTTPS-only.
+    secure: secure || sameSite === 'none',
+    sameSite,
     path: REFRESH_COOKIE_PATH,
   };
 }
