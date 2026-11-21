@@ -27,7 +27,7 @@ flowchart TB
   R --> P[(PostgreSQL)]
 ```
 
-Nest modules: `auth`, `employees` (the directory, the profile, salary changes and the export), `salary-updates` (the bulk update); still to come: `insights` and salary bands. Each follows the same controller → service → repository shape.
+Nest modules: `auth`, `employees` (the directory, the profile, salary changes and the export), `salary-updates` (the bulk update), `insights` (pay figures by country, department and level); still to come: salary bands. Each follows the same controller → service → repository shape.
 
 Why this shape: domain rules are pure functions, so most unit tests need no database and run in milliseconds. Authorisation lives in services, so adding an `EMPLOYEE` role later means new guards and screens, not a redesign (requirements §3). Why repositories exist, what they cost, and the rules that keep them thin are in [tech-stack.md](tech-stack.md) decision 12.
 
