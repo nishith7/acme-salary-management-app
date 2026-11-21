@@ -21,7 +21,10 @@ export class HealthService {
       await this.prisma.$queryRaw`SELECT 1`;
     } catch {
       // Never expose the driver error: it can contain hostnames or usernames.
-      const body: ReadinessErrorResponse = { status: 'error', database: 'down' };
+      const body: ReadinessErrorResponse = {
+        status: 'error',
+        database: 'down',
+      };
       throw new ServiceUnavailableException(body);
     }
 

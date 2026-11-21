@@ -27,6 +27,12 @@ export interface TestApp {
   findCountries: ReturnType<typeof vi.fn>;
   /** Stand-in for prisma.department.findMany. */
   findDepartments: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.employee.findUnique. */
+  findEmployee: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.salaryRecord.findFirst. */
+  findSalaryRecord: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.salaryRecord.create. */
+  createSalaryRecord: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -48,12 +54,17 @@ export async function createTestApp(
   const updateRefreshTokens = vi.fn();
   const findCountries = vi.fn();
   const findDepartments = vi.fn();
+  const findEmployee = vi.fn();
+  const findSalaryRecord = vi.fn();
+  const createSalaryRecord = vi.fn();
 
   const prisma = {
     $queryRaw: queryRaw,
     user: { findUnique: findUser },
     country: { findMany: findCountries },
     department: { findMany: findDepartments },
+    employee: { findUnique: findEmployee },
+    salaryRecord: { findFirst: findSalaryRecord, create: createSalaryRecord },
     refreshToken: {
       create: createRefreshToken,
       findUnique: findRefreshToken,
@@ -84,5 +95,8 @@ export async function createTestApp(
     updateRefreshTokens,
     findCountries,
     findDepartments,
+    findEmployee,
+    findSalaryRecord,
+    createSalaryRecord,
   };
 }

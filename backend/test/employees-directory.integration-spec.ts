@@ -274,4 +274,44 @@ describe('EmployeesRepository.list (integration)', () => {
         '0004',
       ]);
     }));
+
+  it('lists everyone who matches, with no paging, in the sort order, with the date the salary in force started', () =>
+    inRollback(prisma, async (tx) => {
+      await seedDirectory(tx);
+      const repository = new EmployeesRepository(asPrismaService(tx));
+
+      // The query asks for a page of 2, which an export must ignore.
+      const all = await repository.listAll(
+        query({ sortBy: 'employeeCode', page: 2, pageSize: 2 }),
+        today,
+      );
+      const descending = await repository.listAll(
+        query({ sortBy: 'employeeCode', sortOrder: 'desc' }),
+        today,
+      );
+      const oneCountry = await repository.listAll(
+        query({ countries: ['XT'] }),
+        today,
+      );
+
+      expect(all.map((r) => r.employeeCode.replace('EMPTEST-', ''))).toEqual([
+        '0001',
+        '0002',
+        '0003',
+        '0004',
+        '0005',
+      ]);
+      expect(descending[0]?.employeeCode).toBe('EMPTEST-0005');
+      expect(oneCountry.map((r) => r.employeeCode)).toEqual(['EMPTEST-0005']);
+      // Bela: the correction shares the raise's date, and that is when the salary in force
+      // started. Esha has no salary at all.
+      expect(all[1]).toMatchObject({
+        annualAmount: '112000.00',
+        salaryEffectiveFrom: '2025-04-01',
+      });
+      expect(all[4]).toMatchObject({
+        annualAmount: null,
+        salaryEffectiveFrom: null,
+      });
+    }));
 });

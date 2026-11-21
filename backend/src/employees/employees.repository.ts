@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import type { SalaryChangeReason } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { EmployeeExportQuery } from './employees.schemas.js';
 import type { EmployeeQuery } from './employees.schemas.js';
 
 /** One directory row as the database returns it: text for dates and money, so nothing is rounded or shifted by a time zone. */
@@ -21,6 +22,8 @@ export interface EmployeeRow {
   annualAmount: string | null;
   currencyCode: string | null;
   annualAmountUsd: string | null;
+  /** When the salary in force started (YYYY-MM-DD); null if there is no salary. */
+  salaryEffectiveFrom: string | null;
   bandPosition: 'BELOW' | 'WITHIN' | 'ABOVE' | null;
 }
 
@@ -35,6 +38,21 @@ const SORT_COLUMNS: Record<EmployeeQuery['sortBy'], Prisma.Sql> = {
   joiningDate: Prisma.sql`e.joining_date`,
   salaryUsd: Prisma.sql`(s.annual_amount / fx.units_per_usd)`,
 };
+
+/**
+ * The salary in force on `day` for the employee `e`, as the joined row `s`: the latest record
+ * up to that day, the newest entry winning a tie. The one definition of "current salary",
+ * used by the directory and by the bulk update, so they cannot disagree.
+ */
+function salaryInForce(day: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`LEFT JOIN LATERAL (
+        SELECT sr.annual_amount, sr.currency_code, sr.effective_from
+        FROM salary_records sr
+        WHERE sr.employee_id = e.id AND sr.effective_from <= ${day}
+        ORDER BY sr.effective_from DESC, sr.created_at DESC
+        LIMIT 1
+      ) s ON TRUE`;
+}
 
 /**
  * The SQL pieces that define a directory row, shared by the list and the single-employee
@@ -58,13 +76,7 @@ function directoryParts(today: Date) {
   // The salary in force today, its exchange rate and its band. The page
   // always needs them; the count only when a filter uses them.
   const salary = Prisma.sql`
-      LEFT JOIN LATERAL (
-        SELECT sr.annual_amount, sr.currency_code
-        FROM salary_records sr
-        WHERE sr.employee_id = e.id AND sr.effective_from <= ${day}
-        ORDER BY sr.effective_from DESC, sr.created_at DESC
-        LIMIT 1
-      ) s ON TRUE
+      ${salaryInForce(day)}
       LEFT JOIN LATERAL (
         SELECT f.units_per_usd
         FROM fx_rates f
@@ -91,9 +103,83 @@ function directoryParts(today: Date) {
           s.annual_amount::text AS "annualAmount",
           s.currency_code AS "currencyCode",
           round(s.annual_amount / fx.units_per_usd, 2)::text AS "annualAmountUsd",
+          s.effective_from::text AS "salaryEffectiveFrom",
           ${bandPosition} AS "bandPosition"`;
 
   return { day, tenureBand, bandPosition, people, salary, columns };
+}
+
+type DirectoryParts = ReturnType<typeof directoryParts>;
+
+/** The WHERE clause for a query's filters. Different filters must all match; the values of one filter are alternatives. */
+function whereFor(
+  query: EmployeeExportQuery,
+  { tenureBand, bandPosition }: DirectoryParts,
+): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [];
+  if (query.search !== undefined) {
+    const pattern = `%${query.search.replace(/[\\%_]/g, '\\$&')}%`;
+    conditions.push(
+      Prisma.sql`(e.full_name ILIKE ${pattern} OR e.employee_code ILIKE ${pattern})`,
+    );
+  }
+  if (query.statuses) {
+    conditions.push(
+      Prisma.sql`e.status::text = ANY(${query.statuses}::text[])`,
+    );
+  }
+  if (query.countries) {
+    conditions.push(Prisma.sql`c.code = ANY(${query.countries}::text[])`);
+  }
+  if (query.departments) {
+    conditions.push(Prisma.sql`d.name = ANY(${query.departments}::text[])`);
+  }
+  if (query.jobTitles) {
+    conditions.push(Prisma.sql`e.job_title = ANY(${query.jobTitles}::text[])`);
+  }
+  if (query.levels) {
+    conditions.push(Prisma.sql`e.level = ANY(${query.levels}::int[])`);
+  }
+  if (query.tenureBands) {
+    conditions.push(
+      Prisma.sql`${tenureBand} = ANY(${query.tenureBands}::text[])`,
+    );
+  }
+  if (query.bandPositions) {
+    conditions.push(
+      Prisma.sql`${bandPosition} = ANY(${query.bandPositions}::text[])`,
+    );
+  }
+  return conditions.length
+    ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+    : Prisma.empty;
+}
+
+/** The ORDER BY for a query: its sort column and direction, then the employee code so the order is always the same. */
+function orderFor(query: EmployeeExportQuery): Prisma.Sql {
+  const direction =
+    query.sortOrder === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  return Prisma.sql`ORDER BY ${SORT_COLUMNS[query.sortBy]} ${direction} NULLS LAST, e.employee_code ASC`;
+}
+
+/** A YYYY-MM-DD string as the midnight-UTC Date that Prisma stores in a @db.Date column. */
+function calendarDate(isoDate: string): Date {
+  return new Date(`${isoDate}T00:00:00.000Z`);
+}
+
+/** A person a bulk salary update names, as the database returns it: text for dates and money. */
+export interface SalaryTargetRow {
+  employeeId: string;
+  employeeCode: string;
+  fullName: string;
+  status: 'ACTIVE' | 'TERMINATED';
+  joiningDate: string;
+  countryCurrencyCode: string;
+  salaryRecordCount: number;
+  /** The salary in force today; all three are null if the person has none. */
+  currentAmount: string | null;
+  currentCurrency: string | null;
+  currentEffectiveFrom: string | null;
 }
 
 /** One step of an employee's salary history as the database returns it: text for dates and money. */
@@ -139,6 +225,110 @@ export class EmployeesRepository {
       }),
     ]);
     return { countries, departments };
+  }
+
+  /** What the rules for a salary change need to know about an employee, or null if there is none. */
+  async findSalaryContext(id: string): Promise<{
+    status: 'ACTIVE' | 'TERMINATED';
+    joiningDate: string;
+    countryCurrencyCode: string;
+    salaryRecordCount: number;
+  } | null> {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        joiningDate: true,
+        country: { select: { currencyCode: true } },
+        _count: { select: { salaryRecords: true } },
+      },
+    });
+    if (!employee) {
+      return null;
+    }
+    return {
+      status: employee.status,
+      // A @db.Date comes back as midnight UTC, so its UTC date is the stored date.
+      joiningDate: employee.joiningDate.toISOString().slice(0, 10),
+      countryCurrencyCode: employee.country.currencyCode,
+      salaryRecordCount: employee._count.salaryRecords,
+    };
+  }
+
+  /**
+   * The currency of the salary in force on `date` (YYYY-MM-DD): the latest record up to
+   * then, the newest entry winning a tie. If every record starts later, the earliest
+   * record's currency. Null if the employee has no salary at all.
+   */
+  async currencyInForceOn(
+    employeeId: string,
+    date: string,
+  ): Promise<string | null> {
+    const onDate = await this.prisma.salaryRecord.findFirst({
+      where: { employeeId, effectiveFrom: { lte: calendarDate(date) } },
+      orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
+      select: { currencyCode: true },
+    });
+    if (onDate) {
+      return onDate.currencyCode;
+    }
+    const earliest = await this.prisma.salaryRecord.findFirst({
+      where: { employeeId },
+      orderBy: [{ effectiveFrom: 'asc' }, { createdAt: 'asc' }],
+      select: { currencyCode: true },
+    });
+    return earliest?.currencyCode ?? null;
+  }
+
+  /** Appends a salary record. History is append-only: nothing is ever updated or deleted. */
+  async addSalaryRecord(record: {
+    employeeId: string;
+    /** A decimal string, so nothing is rounded on the way in. */
+    annualAmount: string;
+    currencyCode: string;
+    /** YYYY-MM-DD */
+    effectiveFrom: string;
+    reason: SalaryChangeReason;
+    changedById: string;
+  }): Promise<void> {
+    await this.prisma.salaryRecord.create({
+      data: {
+        employeeId: record.employeeId,
+        annualAmount: record.annualAmount,
+        currencyCode: record.currencyCode,
+        effectiveFrom: calendarDate(record.effectiveFrom),
+        reason: record.reason,
+        changedById: record.changedById,
+      },
+    });
+  }
+
+  /**
+   * The people a bulk salary update names, by Employee ID in any case, with what its rules
+   * need: whether they have left, when they joined, the currency of their country, how many
+   * salaries they have, and the one in force today. Codes nobody has are simply absent.
+   */
+  async findSalaryTargets(
+    codes: string[],
+    today: Date,
+  ): Promise<SalaryTargetRow[]> {
+    const day = Prisma.sql`${today.toISOString().slice(0, 10)}::date`;
+    return this.prisma.$queryRaw<SalaryTargetRow[]>`
+      SELECT
+        e.id AS "employeeId",
+        e.employee_code AS "employeeCode",
+        e.full_name AS "fullName",
+        e.status::text AS status,
+        e.joining_date::text AS "joiningDate",
+        c.currency_code AS "countryCurrencyCode",
+        (SELECT count(*) FROM salary_records r WHERE r.employee_id = e.id)::int AS "salaryRecordCount",
+        s.annual_amount::text AS "currentAmount",
+        s.currency_code AS "currentCurrency",
+        s.effective_from::text AS "currentEffectiveFrom"
+      FROM employees e
+      JOIN countries c ON c.id = e.country_id
+      ${salaryInForce(day)}
+      WHERE upper(e.employee_code) = ANY(${codes.map((code) => code.toUpperCase())}::text[])`;
   }
 
   /** One employee as a directory row, or null if there is no such employee. */
@@ -201,57 +391,32 @@ export class EmployeesRepository {
       ORDER BY o.effective_from DESC, o.created_at DESC`;
   }
 
+  /**
+   * Everyone who matches the filters, in the sort order, with no paging: what the export
+   * writes. The same filters and rows as `list`, one query, so the file is exactly the
+   * directory the user was looking at.
+   */
+  async listAll(
+    query: EmployeeExportQuery,
+    today: Date,
+  ): Promise<EmployeeRow[]> {
+    const parts = directoryParts(today);
+    return this.prisma.$queryRaw<EmployeeRow[]>`
+      SELECT ${parts.columns}
+      ${parts.people}
+      ${parts.salary}
+      ${whereFor(query, parts)}
+      ${orderFor(query)}`;
+  }
+
   /** `today` is a parameter so the result does not depend on the clock. */
   async list(
     query: EmployeeQuery,
     today: Date,
   ): Promise<{ rows: EmployeeRow[]; total: number }> {
-    const { tenureBand, bandPosition, people, salary, columns } =
-      directoryParts(today);
-
-    // Different filters must all match; the values of one filter are alternatives.
-    const conditions: Prisma.Sql[] = [];
-    if (query.search !== undefined) {
-      const pattern = `%${query.search.replace(/[\\%_]/g, '\\$&')}%`;
-      conditions.push(
-        Prisma.sql`(e.full_name ILIKE ${pattern} OR e.employee_code ILIKE ${pattern})`,
-      );
-    }
-    if (query.statuses) {
-      conditions.push(
-        Prisma.sql`e.status::text = ANY(${query.statuses}::text[])`,
-      );
-    }
-    if (query.countries) {
-      conditions.push(Prisma.sql`c.code = ANY(${query.countries}::text[])`);
-    }
-    if (query.departments) {
-      conditions.push(Prisma.sql`d.name = ANY(${query.departments}::text[])`);
-    }
-    if (query.jobTitles) {
-      conditions.push(
-        Prisma.sql`e.job_title = ANY(${query.jobTitles}::text[])`,
-      );
-    }
-    if (query.levels) {
-      conditions.push(Prisma.sql`e.level = ANY(${query.levels}::int[])`);
-    }
-    if (query.tenureBands) {
-      conditions.push(
-        Prisma.sql`${tenureBand} = ANY(${query.tenureBands}::text[])`,
-      );
-    }
-    if (query.bandPositions) {
-      conditions.push(
-        Prisma.sql`${bandPosition} = ANY(${query.bandPositions}::text[])`,
-      );
-    }
-    const where = conditions.length
-      ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
-      : Prisma.empty;
-
-    const direction =
-      query.sortOrder === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+    const parts = directoryParts(today);
+    const { people, salary, columns } = parts;
+    const where = whereFor(query, parts);
     const offset = (query.page - 1) * query.pageSize;
 
     const [rows, counts] = await Promise.all([
@@ -260,7 +425,7 @@ export class EmployeesRepository {
         ${people}
         ${salary}
         ${where}
-        ORDER BY ${SORT_COLUMNS[query.sortBy]} ${direction} NULLS LAST, e.employee_code ASC
+        ${orderFor(query)}
         LIMIT ${query.pageSize} OFFSET ${offset}`,
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT count(*) AS count

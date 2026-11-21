@@ -1,14 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { EmployeeRow, SalaryHistoryRow } from './employees.repository.js';
 import { EmployeesRepository } from './employees.repository.js';
 import type {
+  EmployeeExportQuery,
   EmployeeListItem,
   EmployeeListResponse,
   EmployeeProfile,
   EmployeeQuery,
   FilterOptionsResponse,
+  SalaryChangeRequest,
   SalaryHistoryEntry,
 } from './employees.schemas.js';
+import { toEmployeesCsv } from './employees-csv.js';
+import { checkSalaryChange } from './salary-change.rules.js';
 
 @Injectable()
 export class EmployeesService {
@@ -23,6 +32,11 @@ export class EmployeesService {
     };
   }
 
+  /** Everyone who matches the filters, as a CSV file: the directory as the user is looking at it. */
+  async exportCsv(query: EmployeeExportQuery): Promise<string> {
+    return toEmployeesCsv(await this.employees.listAll(query, new Date()));
+  }
+
   /** One employee as the directory shows them, plus the whole salary history. */
   async get(id: string): Promise<EmployeeProfile> {
     const today = new Date();
@@ -34,6 +48,51 @@ export class EmployeesService {
       throw new NotFoundException('Employee not found');
     }
     return { ...toListItem(row), salaryHistory: history.map(toHistoryEntry) };
+  }
+
+  /**
+   * Appends a salary to the employee's history, as the signed-in user, and returns the
+   * updated profile. The currency is not asked for: it is the one in force on the effective
+   * date, or the country's currency for a first salary, so a salary is never recorded in a
+   * currency the person is not paid in.
+   */
+  async recordSalaryChange(
+    employeeId: string,
+    request: SalaryChangeRequest,
+    userId: string,
+  ): Promise<EmployeeProfile> {
+    const context = await this.employees.findSalaryContext(employeeId);
+    if (!context) {
+      throw new NotFoundException('Employee not found');
+    }
+    const problem = checkSalaryChange(
+      {
+        status: context.status,
+        joiningDate: context.joiningDate,
+        hasSalary: context.salaryRecordCount > 0,
+      },
+      request,
+    );
+    if (problem) {
+      throw problem.kind === 'conflict'
+        ? new ConflictException(problem.message)
+        : new BadRequestException(problem.message);
+    }
+
+    const currencyCode =
+      (await this.employees.currencyInForceOn(
+        employeeId,
+        request.effectiveFrom,
+      )) ?? context.countryCurrencyCode;
+    await this.employees.addSalaryRecord({
+      employeeId,
+      annualAmount: request.annualAmount,
+      currencyCode,
+      effectiveFrom: request.effectiveFrom,
+      reason: request.reason,
+      changedById: userId,
+    });
+    return this.get(employeeId);
   }
 
   /** One page of the directory, with the current salary as of today. */

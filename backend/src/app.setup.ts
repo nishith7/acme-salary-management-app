@@ -1,4 +1,5 @@
 import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -13,6 +14,15 @@ export const SWAGGER_PATH = 'docs';
 export function configureApp(app: INestApplication): void {
   trustProxies(app);
   allowBrowserSites(app);
+  // A CSV file is sent as the request body with the type text/csv (the bulk salary update).
+  // Express reads JSON by default and nothing else, so text/csv needs its own reader, and a
+  // limit that fits the biggest file the update takes (20,000 rows is about 2.5 MB). It only
+  // applies to that content type: JSON bodies keep Express's small default limit. The app
+  // always runs on Express.
+  (app as NestExpressApplication).useBodyParser('text', {
+    type: 'text/csv',
+    limit: '6mb',
+  });
   // Fills request.cookies, which is where the refresh token arrives.
   app.use(cookieParser());
   // Validates any parameter declared with a schema, such as @Body({ schema }),

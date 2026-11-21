@@ -99,6 +99,20 @@ export const employeeQuerySchema = z
   });
 export type EmployeeQuery = z.output<typeof employeeQuerySchema>;
 
+/** The export takes the same filters and sort as the list, but is never paged: it is everyone who matches. */
+export const employeeExportQuerySchema = employeeQuerySchema
+  .omit({ page: true, pageSize: true })
+  .meta({
+    example: {
+      statuses: ['ACTIVE'],
+      countries: ['IN', 'US'],
+      departments: ['Engineering'],
+      sortBy: 'fullName',
+      sortOrder: 'asc',
+    },
+  });
+export type EmployeeExportQuery = z.output<typeof employeeExportQuerySchema>;
+
 export const employeeSchema = z.object({
   id: z.uuid(),
   employeeCode: z.string(),
@@ -182,6 +196,41 @@ export const salaryHistoryEntrySchema = z.object({
 export type SalaryHistoryEntry = z.infer<typeof salaryHistoryEntrySchema>;
 
 export const employeeIdSchema = z.uuid();
+
+export const salaryChangeRequestSchema = z
+  .object({
+    annualAmount: z
+      .string()
+      .regex(
+        /^\d{1,12}(\.\d{1,2})?$/,
+        'Use digits only, with a dot and at most two decimals, for example 52000 or 52000.50.',
+      )
+      .refine(
+        (amount) => /[1-9]/.test(amount),
+        'The amount must be above zero.',
+      )
+      .describe(
+        'The new annual gross salary, as a decimal string (never a number, so no rounding), in the currency in force on the effective date.',
+      ),
+    effectiveFrom: z.iso
+      .date()
+      .describe(
+        'The date it takes effect, YYYY-MM-DD. Not before the joining date; a future date schedules the change.',
+      ),
+    reason: z
+      .enum(SalaryChangeReason)
+      .describe(
+        'Why it changed. `HIRE` is only for an employee with no salary yet; every later change is a promotion, merit increase, market adjustment or correction.',
+      ),
+  })
+  .meta({
+    example: {
+      annualAmount: '52000.00',
+      effectiveFrom: '2026-12-01',
+      reason: 'MERIT',
+    },
+  });
+export type SalaryChangeRequest = z.output<typeof salaryChangeRequestSchema>;
 
 export const filterOptionsResponseSchema = z.object({
   countries: z

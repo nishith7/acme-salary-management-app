@@ -1,25 +1,42 @@
-import { Body, Controller, Get, Param, QueryMethod } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Post,
+  QueryMethod,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/authenticated-user.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles } from '../auth/roles.decorator.js';
 import {
+  type EmployeeExportQuery,
   type EmployeeListResponse,
   type EmployeeProfile,
   type EmployeeQuery,
+  employeeExportQuerySchema,
   employeeIdSchema,
   employeeListResponseSchema,
   employeeProfileSchema,
   employeeQuerySchema,
   type FilterOptionsResponse,
   filterOptionsResponseSchema,
+  type SalaryChangeRequest,
+  salaryChangeRequestSchema,
 } from './employees.schemas.js';
 import { EmployeesService } from './employees.service.js';
 
@@ -65,6 +82,54 @@ export class EmployeesController {
     @Param('id', { schema: employeeIdSchema }) id: string,
   ): Promise<EmployeeProfile> {
     return this.employees.get(id);
+  }
+
+  // A download, so the browser can save it: the same filters as the list, in the same body,
+  // but everyone who matches and not one page. QUERY like the list, for the same reason.
+  @QueryMethod('export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="employees.csv"')
+  @ApiOperation({
+    summary: 'Export employees as CSV',
+    description:
+      'Everyone who matches the filters (same body as the list, without paging), in the sort order, as a CSV file: employee, department, country, status, and the salary in force today in local currency and US dollars with the date it started and the pay band. Opens correctly in Excel (UTF-8 with a byte order mark; text that a spreadsheet could run as a formula is defused).',
+  })
+  @ApiProduces('text/csv')
+  @ApiOkResponse({
+    description: 'The CSV file.',
+    schema: { type: 'string' },
+  })
+  @ApiBadRequestResponse({ description: 'The body is invalid.' })
+  exportCsv(
+    @Body({ schema: employeeExportQuerySchema }) query: EmployeeExportQuery,
+  ): Promise<string> {
+    return this.employees.exportCsv(query);
+  }
+
+  @Post(':id/salary-changes')
+  @ApiOperation({
+    summary: 'Record a salary change',
+    description:
+      "Appends a new salary to the employee's history (nothing is edited or deleted; a mistake is fixed with a later `CORRECTION`), recorded as the signed-in user. The currency is the one in force on the effective date (a first salary uses the country's). A future date schedules the change. Returns the updated profile.",
+  })
+  @ApiCreatedResponse({
+    standardSchema: employeeProfileSchema,
+    description: 'The employee with the new salary in their history.',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'The body or id is invalid, the date is before the joining date, or `HIRE` is used for a later change (or not used for the first salary).',
+  })
+  @ApiNotFoundResponse({ description: 'There is no employee with this id.' })
+  @ApiConflictResponse({
+    description: 'The employee has left, so no new salary can be recorded.',
+  })
+  recordSalaryChange(
+    @Param('id', { schema: employeeIdSchema }) id: string,
+    @Body({ schema: salaryChangeRequestSchema }) body: SalaryChangeRequest,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<EmployeeProfile> {
+    return this.employees.recordSalaryChange(id, body, user.id);
   }
 
   // The HTTP QUERY method: a safe, read-only request like GET, but the filters
