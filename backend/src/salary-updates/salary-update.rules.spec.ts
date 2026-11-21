@@ -15,6 +15,7 @@ const target = (overrides: Partial<SalaryTarget> = {}): SalaryTarget => ({
   status: 'ACTIVE',
   joiningDate: '2023-11-20',
   countryCurrencyCode: 'GBP',
+  earliestCurrencyCode: 'GBP',
   salaryRecordCount: 3,
   current: {
     annualAmount: '50000.00',
@@ -42,6 +43,8 @@ const targets = new Map<string, SalaryTarget>([
       employeeCode: 'EMP-00003',
       fullName: 'Cy Gamma',
       countryCurrencyCode: 'EUR',
+      // No salary at all, so no first salary either.
+      earliestCurrencyCode: null,
       salaryRecordCount: 0,
       current: null,
     }),
@@ -167,6 +170,32 @@ describe('checkSalaryUpdate: rows that can be applied', () => {
       currencyCode: 'EUR',
       effectiveFrom: '2023-11-20',
       reason: 'HIRE',
+      previousAmount: null,
+      changePercent: null,
+    });
+  });
+
+  it('uses the currency of the person’s first salary when the row is dated before any salary began', () => {
+    const early = new Map<string, SalaryTarget>([
+      [
+        'EMP-00001',
+        target({
+          current: null,
+          salaryRecordCount: 2,
+          earliestCurrencyCode: 'USD',
+          countryCurrencyCode: 'GBP',
+        }),
+      ],
+    ]);
+    const file = readSalaryUpdateFile(
+      parseCsv(rowsOf('EMP-00001,52000,2023-11-20,Correction')),
+    );
+
+    const row = checkSalaryUpdate(file, early).rows[0];
+
+    expect(row?.outcome).toBe('WILL_UPDATE');
+    expect(row?.change).toMatchObject({
+      currencyCode: 'USD',
       previousAmount: null,
       changePercent: null,
     });

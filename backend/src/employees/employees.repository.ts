@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { calendarDate } from '../common/calendar-date.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { SalaryChangeReason } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -162,11 +163,6 @@ function orderFor(query: EmployeeExportQuery): Prisma.Sql {
   return Prisma.sql`ORDER BY ${SORT_COLUMNS[query.sortBy]} ${direction} NULLS LAST, e.employee_code ASC`;
 }
 
-/** A YYYY-MM-DD string as the midnight-UTC Date that Prisma stores in a @db.Date column. */
-function calendarDate(isoDate: string): Date {
-  return new Date(`${isoDate}T00:00:00.000Z`);
-}
-
 /** A person a bulk salary update names, as the database returns it: text for dates and money. */
 export interface SalaryTargetRow {
   employeeId: string;
@@ -175,8 +171,10 @@ export interface SalaryTargetRow {
   status: 'ACTIVE' | 'TERMINATED';
   joiningDate: string;
   countryCurrencyCode: string;
+  /** The currency of the person's first salary; null if they have none. */
+  earliestCurrency: string | null;
   salaryRecordCount: number;
-  /** The salary in force today; all three are null if the person has none. */
+  /** The salary in force on the row's date; all three are null if the person has none by then. */
   currentAmount: string | null;
   currentCurrency: string | null;
   currentEffectiveFrom: string | null;
@@ -306,13 +304,15 @@ export class EmployeesRepository {
   /**
    * The people a bulk salary update names, by Employee ID in any case, with what its rules
    * need: whether they have left, when they joined, the currency of their country, how many
-   * salaries they have, and the one in force today. Codes nobody has are simply absent.
+   * salaries they have, and the salary in force on the date of the row that names them (so a
+   * raise already applied for a future date counts as in place, and a correction of the past
+   * is measured against what was paid then). Codes nobody has are simply absent.
    */
   async findSalaryTargets(
-    codes: string[],
-    today: Date,
+    requests: { code: string; date: string }[],
   ): Promise<SalaryTargetRow[]> {
-    const day = Prisma.sql`${today.toISOString().slice(0, 10)}::date`;
+    const codes = requests.map((r) => r.code.toUpperCase());
+    const days = requests.map((r) => r.date);
     return this.prisma.$queryRaw<SalaryTargetRow[]>`
       SELECT
         e.id AS "employeeId",
@@ -321,14 +321,16 @@ export class EmployeesRepository {
         e.status::text AS status,
         e.joining_date::text AS "joiningDate",
         c.currency_code AS "countryCurrencyCode",
+        (SELECT r.currency_code FROM salary_records r WHERE r.employee_id = e.id
+          ORDER BY r.effective_from, r.created_at LIMIT 1) AS "earliestCurrency",
         (SELECT count(*) FROM salary_records r WHERE r.employee_id = e.id)::int AS "salaryRecordCount",
         s.annual_amount::text AS "currentAmount",
         s.currency_code AS "currentCurrency",
         s.effective_from::text AS "currentEffectiveFrom"
-      FROM employees e
+      FROM unnest(${codes}::text[], ${days}::date[]) AS w(code, day)
+      JOIN employees e ON upper(e.employee_code) = w.code
       JOIN countries c ON c.id = e.country_id
-      ${salaryInForce(day)}
-      WHERE upper(e.employee_code) = ANY(${codes.map((code) => code.toUpperCase())}::text[])`;
+      ${salaryInForce(Prisma.sql`w.day`)}`;
   }
 
   /** One employee as a directory row, or null if there is no such employee. */

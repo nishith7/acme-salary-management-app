@@ -62,6 +62,7 @@ model User {
 
   refreshTokens RefreshToken[]
   salaryChanges SalaryRecord[]
+  imports       Import[]
 
   @@map("users")
 }
@@ -174,13 +175,43 @@ model SalaryRecord {
   /// Who recorded it. Null when the seed loaded it. A user who changed a salary
   /// cannot be deleted, so the audit trail survives.
   changedById   String?             @map("changed_by") @db.Uuid
+  /// The bulk update that added it; null for a salary entered one at a time or loaded by the seed.
+  importId      String?             @map("import_id") @db.Uuid
   createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
 
   employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   changedBy User?    @relation(fields: [changedById], references: [id], onDelete: Restrict)
+  import    Import?  @relation(fields: [importId], references: [id], onDelete: Restrict)
 
   @@index([employeeId, effectiveFrom(sort: Desc), createdAt(sort: Desc)])
   @@map("salary_records")
+}
+
+/// One applied bulk salary update: the file that was uploaded, who applied it and when, and what
+/// it did. Created only when an update adds at least one salary (a preview saves nothing, and a
+/// file whose rows are all already in place changes nothing). Every salary record the update
+/// added points back here, so any salary can be traced to the file it came from.
+model Import {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fileName       String   @map("file_name")
+  /// SHA-256 (hex) of the file's text, so the same file can be recognised later.
+  fileSha256     String   @map("file_sha256") @db.Char(64)
+  /// Who applied it. A user who applied an update cannot be deleted, so the audit trail survives.
+  uploadedById   String   @map("uploaded_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Rows in the file that asked for a change.
+  rowCount       Int      @map("row_count")
+  /// Salaries added.
+  appliedCount   Int      @map("applied_count")
+  /// Rows already at the salary asked for, so nothing was added.
+  unchangedCount Int      @map("unchanged_count")
+  /// Rows refused because of an error, so nothing was added.
+  skippedCount   Int      @map("skipped_count")
+
+  uploadedBy    User           @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  salaryRecords SalaryRecord[]
+
+  @@map("imports")
 }
 
 /// The pay range for one level in one country, in that country's currency and in the

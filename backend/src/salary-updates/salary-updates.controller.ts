@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -19,11 +20,17 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/authenticated-user.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles } from '../auth/roles.decorator.js';
 import {
+  type ApplyQuery,
+  applyQuerySchema,
   type SalaryUpdateReportResponse,
+  type SalaryUpdateResultResponse,
   salaryUpdateFileSchema,
   salaryUpdateReportSchema,
+  salaryUpdateResultSchema,
 } from './salary-updates.schemas.js';
 import { SalaryUpdatesService } from './salary-updates.service.js';
 
@@ -76,5 +83,31 @@ export class SalaryUpdatesController {
     @Body({ schema: salaryUpdateFileSchema }) csv: string,
   ): Promise<SalaryUpdateReportResponse> {
     return this.salaryUpdates.preview(csv);
+  }
+
+  // 200 and not 201: an update that finds nothing to add creates nothing, and says so.
+  @Post('apply')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Apply a bulk salary update',
+    description:
+      "Send the same CSV that was previewed, as the request body with the content type `text/csv`. It is checked again, on the data as it is now, with exactly the preview's rules. Every row that passes is added to its person's salary history, all under one import and as the signed-in user; rows with errors are skipped, and a row already at the salary asked for adds nothing, so sending the same file again adds nothing the second time. Either all the salaries are added or none are. When nothing would be added, nothing is saved and `importId` is null. A file that cannot be read at all is refused with 400.",
+  })
+  @ApiConsumes('text/csv')
+  @ApiBody({ schema: { type: 'string' }, description: 'The CSV file.' })
+  @ApiOkResponse({
+    standardSchema: salaryUpdateResultSchema,
+    description: 'How many salaries were added, and how many rows were not.',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'The body is empty, too large, not sent as `text/csv`, or a file that cannot be read (a missing column, too many rows).',
+  })
+  apply(
+    @Body({ schema: salaryUpdateFileSchema }) csv: string,
+    @Query({ schema: applyQuerySchema }) query: ApplyQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SalaryUpdateResultResponse> {
+    return this.salaryUpdates.apply(csv, query.fileName, user.id);
   }
 }

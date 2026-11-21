@@ -20,7 +20,21 @@ export function createTestPrisma(): PrismaClient {
  * (`user`, `refreshToken`, ...), which is all a repository uses.
  */
 export function asPrismaService(tx: Tx): PrismaService {
-  return tx as unknown as PrismaService;
+  // A repository that owns a transaction calls `$transaction`, which a transaction client
+  // does not have (transactions do not nest). Here it runs its work on the same client, so
+  // the test sees everything the repository wrote and still rolls it all back at the end.
+  // What this cannot show is the repository's own rollback on failure: that is the database's
+  // job, and is not tested here. Functions are bound to the real client because Prisma's
+  // methods depend on `this`.
+  return new Proxy(tx, {
+    get(target, property) {
+      if (property === '$transaction') {
+        return (work: (client: Tx) => Promise<unknown>) => work(target);
+      }
+      const value: unknown = Reflect.get(target, property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as unknown as PrismaService;
 }
 
 class Rollback extends Error {}

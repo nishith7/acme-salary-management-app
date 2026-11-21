@@ -95,3 +95,36 @@ export const salaryUpdateReportSchema = z.object({
 export type SalaryUpdateReportResponse = z.infer<
   typeof salaryUpdateReportSchema
 >;
+
+/** The query string of the apply endpoint. */
+export const applyQuerySchema = z.object({
+  fileName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .default('salary-update.csv')
+    .describe(
+      'The name of the file that was uploaded, kept with the import so it can be found later.',
+    ),
+});
+export type ApplyQuery = z.output<typeof applyQuerySchema>;
+
+export const salaryUpdateResultSchema = z.object({
+  importId: z
+    .uuid()
+    .nullable()
+    .describe(
+      'The import that now holds the salaries added; null when nothing was added, in which case nothing was saved at all.',
+    ),
+  applied: z.int().describe('Salaries added.'),
+  unchanged: z
+    .int()
+    .describe('Rows already at the salary asked for, so nothing was added.'),
+  skipped: z
+    .int()
+    .describe('Rows refused because of an error, so nothing was added.'),
+});
+export type SalaryUpdateResultResponse = z.infer<
+  typeof salaryUpdateResultSchema
+>;

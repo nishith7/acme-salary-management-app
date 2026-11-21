@@ -284,15 +284,22 @@ describe('EmployeesRepository profile queries (integration)', () => {
       });
     }));
 
-  it('finds the people a file names whatever the case of their code, with the salary in force today, and leaves out codes nobody has', () => {
+  it('finds the people a file names whatever the case of their code, with the salary in force on the date asked for, and leaves out codes nobody has', () => {
     return inRollback(prisma, async (tx) => {
       const { quin, pia } = await seedProfiles(tx);
       const repository = new EmployeesRepository(asPrismaService(tx));
+      const piaOn = async (day: string) => {
+        const [found] = await repository.findSalaryTargets([
+          { code: 'emptest-p002', date: day },
+        ]);
+        return found;
+      };
 
-      const found = await repository.findSalaryTargets(
-        ['emptest-p002', 'EMPTEST-P001', 'NOBODY-HAS-THIS'],
-        today,
-      );
+      const found = await repository.findSalaryTargets([
+        { code: 'emptest-p002', date: '2026-11-20' },
+        { code: 'EMPTEST-P001', date: '2026-11-20' },
+        { code: 'NOBODY-HAS-THIS', date: '2026-11-20' },
+      ]);
 
       expect(found).toHaveLength(2);
       const byCode = new Map(found.map((r) => [r.employeeCode, r]));
@@ -303,19 +310,35 @@ describe('EmployeesRepository profile queries (integration)', () => {
         status: 'ACTIVE',
         joiningDate: '2026-01-01',
         countryCurrencyCode: 'XTS',
+        earliestCurrency: 'XTS',
         salaryRecordCount: 1,
         currentAmount: '90000.00',
         currentCurrency: 'XTS',
         currentEffectiveFrom: '2026-01-01',
       });
-      // Pia: six entries; the one in force today is the move to another currency, and the
-      // raise dated in the future is not it.
       expect(byCode.get('EMPTEST-P002')).toMatchObject({
         employeeId: pia.id,
         salaryRecordCount: 6,
+      });
+
+      // Pia's salary in force depends on the date asked about: before and after the move to
+      // another currency, and for a day after the raise that is already scheduled.
+      expect(await piaOn('2025-06-01')).toMatchObject({
+        currentAmount: '112000.00',
+        currentCurrency: 'XTS',
+      });
+      expect(await piaOn('2026-11-20')).toMatchObject({
         currentAmount: '9000000.00',
         currentCurrency: 'XTT',
-        currentEffectiveFrom: '2026-01-01',
+      });
+      expect(await piaOn('2027-06-01')).toMatchObject({
+        currentAmount: '9500000.00',
+        currentEffectiveFrom: '2027-01-01',
+      });
+      // Before her first salary began there is none in force, but her first currency is known.
+      expect(await piaOn('2023-01-01')).toMatchObject({
+        currentAmount: null,
+        earliestCurrency: 'XTS',
       });
     });
   });

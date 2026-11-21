@@ -72,8 +72,13 @@ export interface SalaryTarget {
   /** YYYY-MM-DD */
   joiningDate: string;
   countryCurrencyCode: string;
+  /** The currency of the person's first salary, for a row dated before any salary started. */
+  earliestCurrencyCode: string | null;
   salaryRecordCount: number;
-  /** The salary in force today; null if the person has none. */
+  /**
+   * The salary in force on the row's own effective date (a salary already scheduled for
+   * that date counts); null if the person has none by then.
+   */
   current: {
     annualAmount: string;
     currencyCode: string;
@@ -191,7 +196,7 @@ export function readSalaryUpdateFile(records: CsvRecord[]): SalaryUpdateFile {
 }
 
 /** True for a date that exists, written YYYY-MM-DD (2026-02-30 does not). */
-function isRealIsoDate(text: string): boolean {
+export function isRealIsoDate(text: string): boolean {
   const parts = ISO_DATE.exec(text);
   if (!parts) {
     return false;
@@ -320,7 +325,12 @@ function checkRow(
     warnings,
     change: {
       annualAmount: entry.amount,
-      currencyCode: current?.currencyCode ?? target.countryCurrencyCode,
+      // As for a single change: the currency in force on that date, else the person's first
+      // salary's, else their country's.
+      currencyCode:
+        current?.currencyCode ??
+        target.earliestCurrencyCode ??
+        target.countryCurrencyCode,
       effectiveFrom: entry.date,
       reason,
       previousAmount: current?.annualAmount ?? null,
