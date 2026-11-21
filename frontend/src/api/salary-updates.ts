@@ -46,6 +46,18 @@ export interface SalaryUpdateReport {
   };
 }
 
+/** What applying a file did. */
+export interface SalaryUpdateResult {
+  /** The import that now holds the salaries added; null when nothing was added (nothing was saved). */
+  importId: string | null;
+  /** Salaries added. */
+  applied: number;
+  /** Rows already at the salary asked for. */
+  unchanged: number;
+  /** Rows refused because of an error. */
+  skipped: number;
+}
+
 export function createSalaryUpdatesApi(client: ApiClient) {
   return {
     /** The CSV to fill in: everyone who can still be given a salary, with three empty columns. */
@@ -73,6 +85,22 @@ export function createSalaryUpdatesApi(client: ApiClient) {
         data: csv,
         headers: { 'Content-Type': 'text/csv' },
         signal,
+      });
+      return data;
+    },
+
+    /**
+     * Applies a file: the server checks it again, on the data as it is now, and adds the
+     * salary of every row that passes, all under one import. Rows with errors are skipped.
+     * Rejects with an `ApiError` (400) for a file that cannot be read.
+     */
+    async apply(csv: string, fileName: string): Promise<SalaryUpdateResult> {
+      const { data } = await client.http.request<SalaryUpdateResult>({
+        method: 'POST',
+        url: '/salary-updates/apply',
+        params: { fileName },
+        data: csv,
+        headers: { 'Content-Type': 'text/csv' },
       });
       return data;
     },

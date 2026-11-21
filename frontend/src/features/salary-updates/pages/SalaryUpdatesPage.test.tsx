@@ -1,7 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authApi, employeesApi, salaryUpdatesApi } from '../../../api/index.ts';
+import {
+  ApiError,
+  authApi,
+  employeesApi,
+  salaryUpdatesApi,
+} from '../../../api/index.ts';
 import type { SalaryUpdateReport } from '../../../api/salary-updates.ts';
 import { paths } from '../../../app/paths.ts';
 import { saveBlob } from '../../../lib/save-file.ts';
@@ -251,5 +256,151 @@ describe('the bulk salary update page', () => {
       '3,EMP-99999,No employee has the Employee ID EMP-99999.',
     );
     expect(text).not.toContain('EMP-00001');
+  });
+});
+
+describe('applying a bulk salary update', () => {
+  const clean: SalaryUpdateReport = {
+    fileProblems: [],
+    rows: [report.rows[3]!],
+    summary: {
+      rows: 1,
+      willUpdate: 1,
+      unchanged: 0,
+      errors: 0,
+      withWarnings: 0,
+      notRequested: 0,
+    },
+  };
+  const nothing: SalaryUpdateReport = {
+    fileProblems: [],
+    rows: [report.rows[1]!],
+    summary: {
+      rows: 1,
+      willUpdate: 0,
+      unchanged: 0,
+      errors: 1,
+      withWarnings: 0,
+      notRequested: 0,
+    },
+  };
+
+  async function preview(report: SalaryUpdateReport) {
+    vi.spyOn(salaryUpdatesApi, 'preview').mockResolvedValue(report);
+    const user = setup();
+    renderApp(paths.salaryUpdates);
+    await screen.findByRole('heading', { name: 'Bulk salary update' });
+    await chooseFile(user, csvFile());
+    await screen.findByText('will be updated');
+    return user;
+  }
+
+  it('keeps Apply off until the person says they have looked at the errors and the warnings, then applies the same file and says what happened', async () => {
+    const apply = vi.spyOn(salaryUpdatesApi, 'apply').mockResolvedValue({
+      importId: '9d3c5e1a-7b24-4f60-8a1d-3c5e7f9b2a46',
+      applied: 2,
+      unchanged: 1,
+      skipped: 1,
+    });
+    const user = await preview(report);
+    const button = screen.getByRole('button', {
+      name: 'Apply 2 salary changes',
+    });
+
+    expect(button).toBeDisabled();
+    await user.click(
+      screen.getByRole('checkbox', { name: /i have looked at the rows/i }),
+    );
+    expect(button).toBeEnabled();
+    await user.click(button);
+
+    // The same text that was checked goes back, with the file's name for the record.
+    await waitFor(() =>
+      expect(apply).toHaveBeenCalledExactlyOnceWith(csvText, 'salary.csv'),
+    );
+    expect(
+      await screen.findByText(/2 salary changes added/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /1 row was already at that salary and 1 row was skipped/i,
+      ),
+    ).toBeInTheDocument();
+    // The check is gone, so the old result cannot be applied twice.
+    expect(
+      screen.queryByRole('button', { name: /apply/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says what it will skip and what it will apply, in the confirmation itself', async () => {
+    await preview(report);
+
+    expect(
+      screen.getByRole('checkbox', {
+        name: /1 row with errors will be skipped, 1 row marked check will be applied/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('needs no confirmation for a file with nothing to double-check', async () => {
+    vi.spyOn(salaryUpdatesApi, 'apply').mockResolvedValue({
+      importId: 'x',
+      applied: 1,
+      unchanged: 0,
+      skipped: 0,
+    });
+    const user = await preview(clean);
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Apply 1 salary change' }),
+    );
+
+    expect(
+      await screen.findByText(/1 salary change added/i),
+    ).toBeInTheDocument();
+  });
+
+  it('offers nothing to apply when no row would change a salary', async () => {
+    await preview(nothing);
+
+    expect(screen.getByText(/nothing to apply/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^apply/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the check on screen, with the API’s reason, when applying fails', async () => {
+    vi.spyOn(salaryUpdatesApi, 'apply').mockRejectedValue(
+      new ApiError(400, 'The file is missing the column "Reason".'),
+    );
+    const user = await preview(clean);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Apply 1 salary change' }),
+    );
+
+    expect(
+      await screen.findByText(/missing the column "Reason"/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Apply 1 salary change' }),
+    ).toBeEnabled();
+  });
+
+  it('says when nothing was added because the data had moved on since the check', async () => {
+    vi.spyOn(salaryUpdatesApi, 'apply').mockResolvedValue({
+      importId: null,
+      applied: 0,
+      unchanged: 1,
+      skipped: 0,
+    });
+    const user = await preview(clean);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Apply 1 salary change' }),
+    );
+
+    expect(await screen.findByText(/nothing was added/i)).toBeInTheDocument();
   });
 });

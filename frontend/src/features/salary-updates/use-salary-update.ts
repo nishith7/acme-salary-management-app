@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { salaryUpdatesApi } from '../../api/index.ts';
 import { saveBlob } from '../../lib/save-file.ts';
 
@@ -18,5 +18,18 @@ export function useDownloadSalaryTemplate() {
   return useMutation({
     mutationFn: () => salaryUpdatesApi.template(),
     onSuccess: (file) => saveBlob(file, 'salary-update-template.csv'),
+  });
+}
+
+/**
+ * Applies the file that was checked. The salaries changed, so everything cached about the
+ * directory (its pages, and the profiles with their histories) is out of date and is dropped.
+ */
+export function useApplySalaryUpdate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ csv, fileName }: { csv: string; fileName: string }) =>
+      salaryUpdatesApi.apply(csv, fileName),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
   });
 }
