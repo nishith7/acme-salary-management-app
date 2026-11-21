@@ -12,6 +12,7 @@ export const SWAGGER_PATH = 'docs';
  */
 export function configureApp(app: INestApplication): void {
   trustProxies(app);
+  allowBrowserSites(app);
   // Fills request.cookies, which is where the refresh token arrives.
   app.use(cookieParser());
   // Validates any parameter declared with a schema, such as @Body({ schema }),
@@ -38,6 +39,34 @@ function trustProxies(app: INestApplication): void {
     };
     express.set('trust proxy', hops);
   }
+}
+
+/**
+ * Lets pages served from the sites in CORS_ORIGINS call this API from a browser.
+ * The frontend runs on its own address (another port in development, another
+ * host in production), and without this a browser blocks every call it makes.
+ * Nothing is allowed unless it is listed, and credentials are on because the
+ * refresh token is a cookie. Not a security boundary for the API itself:
+ * every route still needs its own token, and a non-browser client ignores CORS.
+ */
+function allowBrowserSites(app: INestApplication): void {
+  const origins = app
+    .get<ConfigService<Env, true>>(ConfigService)
+    .getOrThrow('CORS_ORIGINS', { infer: true });
+
+  if (origins.length === 0) {
+    return;
+  }
+
+  app.enableCors({
+    origin: origins,
+    credentials: true,
+    // QUERY is the directory's method, and it is not one a browser allows by default.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'QUERY'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    // Without this a browser asks again before every call (Chrome's default is 5 seconds).
+    maxAge: 600,
+  });
 }
 
 function setupSwagger(app: INestApplication): void {

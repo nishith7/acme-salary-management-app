@@ -11,6 +11,14 @@ export interface Env {
   /** Login requests one client address may make per window. */
   LOGIN_RATE_LIMIT: number;
   LOGIN_RATE_WINDOW_SECONDS: number;
+  /**
+   * The sites whose pages may call this API from a browser, each as an origin
+   * (scheme and host, plus a port if it is not the default), for example
+   * http://localhost:5173. Empty by default: no page on another site can read
+   * a response. A list and never a wildcard, because the refresh token is a
+   * cookie and browsers refuse a wildcard when cookies are involved.
+   */
+  CORS_ORIGINS: string[];
 }
 
 const POSTGRES_PROTOCOLS = new Set(['postgres:', 'postgresql:']);
@@ -71,7 +79,48 @@ export function validateEnv(config: Record<string, unknown>): Env {
         max: 86_400,
       },
     ),
+    CORS_ORIGINS: readOrigins(config, 'CORS_ORIGINS'),
   };
+}
+
+/**
+ * Reads a comma-separated list of origins. A missing or blank value is an
+ * empty list. Each entry must be exactly an origin: "http://localhost:5173",
+ * not "http://localhost:5173/" or "localhost:5173" or "*". The message names
+ * the variable and never echoes what was set.
+ */
+function readOrigins(config: Record<string, unknown>, name: string): string[] {
+  const raw = config[name];
+  if (raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+    return [];
+  }
+
+  const origins =
+    typeof raw === 'string'
+      ? raw
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter((entry) => entry !== '')
+      : [];
+
+  if (typeof raw !== 'string' || !origins.every(isBareOrigin)) {
+    throw new Error(
+      `Invalid environment: ${name} must be a comma-separated list of origins such as https://app.example.com (scheme and host, with no path and no trailing slash)`,
+    );
+  }
+  return origins;
+}
+
+function isBareOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.origin === value
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

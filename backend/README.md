@@ -20,13 +20,15 @@ NestJS 12 (ESM) + Prisma + PostgreSQL. See [../docs/tech-stack.md](../docs/tech-
 
 Copy `.env.example` to `.env`. `DATABASE_URL` is the pooled Neon URL used by the API; `DIRECT_URL` is the direct URL used by Prisma migrations; `JWT_SECRET` signs access tokens (at least 32 characters, different in every environment). The app refuses to start if `DATABASE_URL` is missing or not a Postgres URL, or if `JWT_SECRET` is missing or too short.
 
-Three optional settings control the login rate limit:
+Optional settings:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOGIN_RATE_LIMIT` | 5 | Login requests one client address may make per window. Failed and successful ones both count. |
 | `LOGIN_RATE_WINDOW_SECONDS` | 60 | The window length. |
 | `TRUST_PROXY` | 0 | How many proxies sit in front of the app (0 to 10). **Set it per environment and check it after deploying**, see below. |
+| `PORT` | 3000 | The port the API listens on. The frontend's `VITE_API_URL` must point at it. |
+| `CORS_ORIGINS` | none | The sites whose pages may call the API from a browser, comma-separated origins such as `http://localhost:5173` (no path, no trailing slash, never `*`). With none listed, a browser blocks every call from another site. Locally, list the frontend's address. |
 
 A wrong value (a decimal, text, out of range) stops startup with a message naming the variable.
 

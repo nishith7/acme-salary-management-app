@@ -19,6 +19,8 @@ export default defineConfig({
       TRUST_PROXY: '0',
       LOGIN_RATE_LIMIT: '1000',
       LOGIN_RATE_WINDOW_SECONDS: '60',
+      // No site is allowed by default; the CORS spec sets its own list.
+      CORS_ORIGINS: '',
     },
   },
 });

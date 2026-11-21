@@ -22,6 +22,7 @@ describe('validateEnv', () => {
       TRUST_PROXY: 0,
       LOGIN_RATE_LIMIT: 5,
       LOGIN_RATE_WINDOW_SECONDS: 60,
+      CORS_ORIGINS: [],
     });
   });
 
@@ -89,6 +90,37 @@ describe('validateEnv', () => {
 
       expect(message).toContain('JWT_SECRET');
       expect(message).not.toContain(tooShort);
+    });
+  });
+
+  describe('CORS_ORIGINS, the sites whose pages may call the API', () => {
+    const read = (value: unknown) =>
+      validateEnv({ ...valid, CORS_ORIGINS: value }).CORS_ORIGINS;
+
+    it('allows no site when it is missing or blank, so a browser on another site gets nothing', () => {
+      expect(validateEnv(valid).CORS_ORIGINS).toEqual([]);
+      expect(read('')).toEqual([]);
+      expect(read('   ')).toEqual([]);
+    });
+
+    it('reads a comma-separated list, ignoring spaces and empty entries', () => {
+      expect(read(' http://localhost:5173 , https://hr.example.com ,')).toEqual(
+        ['http://localhost:5173', 'https://hr.example.com'],
+      );
+    });
+
+    it.each([
+      ['a wildcard, which cannot be combined with cookies', '*'],
+      ['an address with a path', 'http://localhost:5173/app'],
+      ['an address with a trailing slash', 'http://localhost:5173/'],
+      ['an address with no scheme', 'localhost:5173'],
+      ['a scheme that is not http or https', 'ftp://example.com'],
+      ['one bad entry among good ones', 'http://localhost:5173,nonsense'],
+    ])('refuses %s, naming the variable and not the value', (_what, value) => {
+      const message = errorMessageOf(() => read(value));
+
+      expect(message).toContain('CORS_ORIGINS');
+      expect(message).not.toContain(value);
     });
   });
 
