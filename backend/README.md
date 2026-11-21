@@ -29,6 +29,7 @@ Optional settings:
 | `TRUST_PROXY` | 0 | How many proxies sit in front of the app (0 to 10). **Set it per environment and check it after deploying**, see below. |
 | `PORT` | 3000 | The port the API listens on. The frontend's `VITE_API_URL` must point at it. |
 | `CORS_ORIGINS` | none | The sites whose pages may call the API from a browser, comma-separated origins such as `http://localhost:5173` (no path, no trailing slash, never `*`). With none listed, a browser blocks every call from another site. Locally, list the frontend's address. |
+| `REFRESH_COOKIE_SAMESITE` | strict | Whether the browser may send the sign-in cookie from another site: `strict`, `lax` or `none`. Keep `strict` when the site and the API share a site (local development). When the site is on another host (GitHub Pages calling an API on Render), `strict` means the cookie is never sent and users are signed out on every reload and every 15 minutes: set `none`. `none` forces the cookie to be HTTPS-only, works in Chrome, Edge and Firefox but not in Safari, and makes `/auth/refresh` and `/auth/logout` refuse a request whose `Origin` is not in `CORS_ORIGINS` (or the API's own host). |
 
 A wrong value (a decimal, text, out of range) stops startup with a message naming the variable.
 

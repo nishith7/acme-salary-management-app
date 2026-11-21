@@ -91,4 +91,4 @@ The same applies to any host where the site and the API are on different sites, 
 Vercel and Render. Production needs one of: the site and the API under one site (for example
 `app.example.com` and `api.example.com`), or a host that forwards `/api/*` to the API (then
 `VITE_API_URL=/api`, and the cookie path must be fixed too), or a cookie that allows
-cross-site use (`SameSite=None; Secure`). That is decided at M9 (see `docs/plan.md`).
+cross-site use (`SameSite=None; Secure`). For the demo the API uses the last: set `REFRESH_COOKIE_SAMESITE=none` on it (see `backend/README.md`), which works in Chrome, Edge and Firefox and not in Safari.
