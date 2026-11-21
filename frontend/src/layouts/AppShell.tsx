@@ -18,8 +18,15 @@ export function AppShell() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar position="sticky">
+    <Box
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: 'background.default',
+      }}
+    >
+      <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
           <BrandLogo />
           <Box sx={{ flexGrow: 1 }} />
@@ -33,7 +40,11 @@ export function AppShell() {
           <SignOutButton />
         </Toolbar>
       </AppBar>
-      <Box component="main" sx={{ p: { xs: 2, md: 3 } }}>
+      {/* A page may fill this box (height: 100%); a longer one scrolls inside it. */}
+      <Box
+        component="main"
+        sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}
+      >
         <Outlet />
       </Box>
     </Box>

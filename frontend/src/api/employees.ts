@@ -23,6 +23,11 @@ export type BandPosition = (typeof BAND_POSITIONS)[number];
 export type SortField = (typeof SORT_FIELDS)[number];
 export type SortOrder = 'asc' | 'desc';
 
+/** True when `value` is a column the API can sort by. */
+export function isSortField(value: string): value is SortField {
+  return (SORT_FIELDS as readonly string[]).includes(value);
+}
+
 /**
  * The body of `QUERY /employees`. Everything is optional: `{}` is everyone, first page.
  * Different filters must all match; several values inside one filter match any of them.
@@ -80,8 +85,25 @@ export interface EmployeeListResponse {
   total: number;
 }
 
+/** What the country and department filters can be set to (`GET /employees/filter-options`). */
+export interface FilterOptions {
+  /** Ordered by name. `code` is what the `countries` filter takes. */
+  countries: { code: string; name: string }[];
+  /** Ordered by name; each is what the `departments` filter takes. */
+  departments: string[];
+}
+
 export function createEmployeesApi(client: ApiClient) {
   return {
+    async filterOptions(signal?: AbortSignal): Promise<FilterOptions> {
+      const { data } = await client.http.request<FilterOptions>({
+        method: 'GET',
+        url: '/employees/filter-options',
+        signal,
+      });
+      return data;
+    },
+
     /**
      * One page of the directory. It uses the HTTP QUERY method: a read-only request
      * that carries its filters in a JSON body. `signal` lets TanStack Query cancel a

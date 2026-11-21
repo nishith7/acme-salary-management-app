@@ -39,4 +39,6 @@ export const palette: PaletteOptions = {
     paper: '#FFFFFF',
   },
   divider: '#E7E9EE',
+  // The DataGrid reads its header colour from here.
+  DataGrid: { bg: '#FFFFFF', headerBg: '#F7F8FA' },
 };

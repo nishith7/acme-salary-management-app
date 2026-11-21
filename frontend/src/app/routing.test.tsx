@@ -1,7 +1,7 @@
 import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiClient, authApi } from '../api/index.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, apiClient, authApi, employeesApi } from '../api/index.ts';
 import type { AuthUser, LoginResponse } from '../api/types.ts';
 import { renderApp } from '../test/render-app.tsx';
 
@@ -31,6 +31,22 @@ async function fillAndSubmit(
   await user.type(screen.getByLabelText('Password'), password);
   await user.click(screen.getByRole('button', { name: 'Sign in' }));
 }
+
+beforeEach(() => {
+  // These tests are about signing in and routing, not the directory. The signed-in page does
+  // ask the API for employees, so give it an empty answer rather than let it reach for the
+  // network (a failed load would put a second alert on screen).
+  vi.spyOn(employeesApi, 'list').mockResolvedValue({
+    items: [],
+    page: 1,
+    pageSize: 25,
+    total: 0,
+  });
+  vi.spyOn(employeesApi, 'filterOptions').mockResolvedValue({
+    countries: [],
+    departments: [],
+  });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
