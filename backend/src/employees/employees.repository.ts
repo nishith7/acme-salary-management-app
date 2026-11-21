@@ -60,7 +60,7 @@ function salaryInForce(day: Prisma.Sql): Prisma.Sql {
  * lookup so the two can never disagree about what "the salary today" or "the pay band
  * position" means. `today` is a parameter so nothing depends on the clock.
  */
-function directoryParts(today: Date) {
+export function directoryParts(today: Date) {
   const day = Prisma.sql`${today.toISOString().slice(0, 10)}::date`;
 
   const tenureYears = Prisma.sql`EXTRACT(YEAR FROM age(COALESCE(e.terminated_on, ${day}), e.joining_date))`;
@@ -112,9 +112,24 @@ function directoryParts(today: Date) {
 
 type DirectoryParts = ReturnType<typeof directoryParts>;
 
+/** The filters of a directory query: what `whereFor` reads, without the paging and the sort. */
+export type DirectoryFilters = Partial<
+  Pick<
+    EmployeeExportQuery,
+    | 'search'
+    | 'statuses'
+    | 'countries'
+    | 'departments'
+    | 'jobTitles'
+    | 'levels'
+    | 'tenureBands'
+    | 'bandPositions'
+  >
+>;
+
 /** The WHERE clause for a query's filters. Different filters must all match; the values of one filter are alternatives. */
-function whereFor(
-  query: EmployeeExportQuery,
+export function whereFor(
+  query: DirectoryFilters,
   { tenureBand, bandPosition }: DirectoryParts,
 ): Prisma.Sql {
   const conditions: Prisma.Sql[] = [];
