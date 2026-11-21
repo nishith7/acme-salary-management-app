@@ -25,7 +25,7 @@
 
 | Question | Options | How it will be decided |
 |---|---|---|
-| How to get each employee's current salary in the directory | (a) lateral join / `DISTINCT ON` over salary history; (b) keep a `current_salary` pointer on the employee, updated in the same transaction as a salary change | Compare `EXPLAIN (ANALYZE, BUFFERS)` on the 10k seed. Prefer (a) if it meets the target, since it has one source of truth. |
+| How to get each employee's current salary in the directory | (a) lateral join / `DISTINCT ON` over salary history; (b) keep a `current_salary` pointer on the employee, updated in the same transaction as a salary change | Compare `EXPLAIN (ANALYZE, BUFFERS)` on the 10k seed. Prefer (a) if it meets the target, since it has one source of truth. **Decided: (a), a lateral join with the `(employee_id, effective_from DESC, created_at DESC)` index.** It takes 45 ms for the default page against the 500 ms target (section 5), so a `current_salary` pointer is not needed. |
 | Pagination style | offset/limit vs keyset | Offset first (supports arbitrary sort columns and page jumps). Revisit only if deep pages exceed the target. |
 | Name search | `ILIKE` scan vs trigram index | At 10k rows a scan is expected to be fast; add `pg_trgm` only if measured to be needed. |
 
@@ -42,7 +42,7 @@ How: seed 10,000 employees, then time each endpoint over repeated calls and capt
 
 | Endpoint / query | Before | After | Change made |
 |---|---|---|---|
-| Directory, default page | TBD | TBD | TBD |
+| Directory, default page (empty body: page 1 of 25, sorted by name) | 30.2 s (`EXPLAIN ANALYZE` execution time). 28 s of it was one `Seq Scan` on `salary_records` run 10,000 times, about 60,000 rows read each time, so about 590 million rows read and discarded | 45 ms (three runs: 45.7, 42.8 and 45.0 ms); the count query takes 4.3 ms | Added the index `salary_records (employee_id, effective_from DESC, created_at DESC)`, the exact order the "salary in force today" lookup reads. The plan now shows 10,000 index lookups at 0.002 ms each. The query itself is unchanged: the `fx_rates` and `salary_bands` joins cost about 0.001 ms per row, so they were never the problem. Measured with `EXPLAIN (ANALYZE, BUFFERS)` on the real 10,000 employees and 59,077 salary records, direct URL, from a laptop to Neon, today fixed at 2026-11-20. This is database time only; the time through the API (network, Nest) has not been measured yet. |
 | Directory, filtered and sorted | TBD | TBD | TBD |
 | Insights: pay by country / department / level | TBD | TBD | TBD |
 | Import, 10,000 rows (validate and preview; apply) | TBD | TBD | TBD |

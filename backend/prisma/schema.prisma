@@ -153,9 +153,11 @@ model Employee {
 /// The current salary is the latest effectiveFrom up to today, with ties going to the
 /// newest createdAt, so a correction can share the date of the record it fixes.
 ///
-/// There are no secondary indexes yet, on purpose (see Employee). The likely first one is
-/// (employee_id, effective_from DESC), added once the salary history is seeded and the
-/// query plans show a need. annual_amount > 0 is validated by the API, because Prisma
+/// The one secondary index is (employee_id, effective_from DESC, created_at DESC), which is
+/// exactly the order that picks "the salary in force". It was added after the history was
+/// seeded and the directory query's plan showed the need: without it, finding the current
+/// salary scanned this whole table once per employee (30 s for the first page; see
+/// docs/performance.md). annual_amount > 0 is validated by the API, because Prisma
 /// cannot express that check without hand-written SQL.
 model SalaryRecord {
   id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -177,6 +179,7 @@ model SalaryRecord {
   employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   changedBy User?    @relation(fields: [changedById], references: [id], onDelete: Restrict)
 
+  @@index([employeeId, effectiveFrom(sort: Desc), createdAt(sort: Desc)])
   @@map("salary_records")
 }
 
