@@ -27,41 +27,46 @@ flowchart TB
   R --> P[(PostgreSQL)]
 ```
 
-Planned Nest modules: `auth`, `employees`, `salaries` (history and bands), `imports`, `insights`, `export`. Each follows the same controller → service → repository shape.
+Nest modules: `auth`, `employees` (the directory, the profile, salary changes and the export), `salary-updates` (the bulk update); still to come: `insights` and salary bands. Each follows the same controller → service → repository shape.
 
 Why this shape: domain rules are pure functions, so most unit tests need no database and run in milliseconds. Authorisation lives in services, so adding an `EMPLOYEE` role later means new guards and screens, not a redesign (requirements §3). Why repositories exist, what they cost, and the rules that keep them thin are in [tech-stack.md](tech-stack.md) decision 12.
 
-## 3. Import flow (F6)
+## 3. Bulk salary update flow (F6)
 
-The HR Manager's data starts in Excel, so import is the front door (see [requirements.md](requirements.md) §3). This flow is designed, not built yet.
+The HR Manager changes many salaries from a spreadsheet: download a template, fill in the changes, upload the CSV, see every row checked, then apply (see [requirements.md](requirements.md) §2 and §3, and [tech-stack.md](tech-stack.md) decision 22). Both halves are built.
 
 ```mermaid
 sequenceDiagram
   actor HR as HR Manager
   participant API
   participant DB
-  HR->>API: POST /imports (an .xlsx or .csv file)
-  API->>API: read the rows, validate each one,<br/>match employees by employee code
-  API->>DB: save the result as a draft import
-  API-->>HR: 201 preview (created, changed, unchanged, errors per row)
-  alt the preview has errors
-    HR->>API: fix the file and upload it again
-  else the preview is clean
-    HR->>API: POST /imports/{id}/commit
-    API->>DB: one transaction: add or update employees,<br/>append salary records only where the amount differs,<br/>mark the import applied
-    API-->>HR: 200 (created, changed, unchanged)
+  HR->>API: GET /salary-updates/template
+  API-->>HR: CSV: active people, current salary, 3 empty columns
+  HR->>API: POST /salary-updates/preview (the CSV as the body)
+  API->>DB: one lookup of the people the file names,<br/>each with the salary in force on its row's date
+  API->>API: check every row (nothing is stored)
+  API-->>HR: counts, and per row: will update / unchanged / error, warnings
+  alt the file has errors
+    HR->>HR: fix the spreadsheet, choose it again
+  else HR confirms what will be skipped and what to double-check
+    HR->>API: POST /salary-updates/apply (the same CSV)
+    API->>DB: check again on today's data, then in one transaction:<br/>one import row, and a salary record for every row that passed
+    API-->>HR: added / already in place / skipped
   end
 ```
 
-- **What was previewed is what is applied.** The draft keeps the parsed rows, and the commit applies those, not a fresh read of the file.
-- **Repeatable.** Employees are matched by `employee_code`, and a salary record is appended only when the amount differs from the current one, so uploading the same file twice changes nothing.
-- **Omission is not termination.** People missing from a new file are left as they are; ending someone's employment is an explicit change.
-- **Traceable.** Every salary record an import creates points back to that import, so a bad upload can be found and corrected. Corrections are new records, never deletions.
-- **All or nothing.** The commit is one transaction, so a failure part-way leaves no half-applied upload.
+- **Stateless preview.** Nothing is stored between the preview and applying: the browser sends the file again. The preview and applying run the same check (one pure function), so there is no draft to expire or clean up.
+- **Applying checks again, on purpose.** It acts on the data as it is when applying, not as it was at the preview, so a salary changed in between is never overwritten by a stale preview. The result says what was actually added.
+- **Judged on the row's own date.** A row is "already in place" when the salary in force on its effective date equals the new amount. Judging against today's salary would add a raise dated next month a second time on a repeat; this was found in review and has a test.
+- **Repeatable.** Applying the same file again adds nothing, including for future-dated rows; measured on the real data, 9,426 rows applied and applied again with nothing added.
+- **Rows with errors are skipped, not applied,** after the person confirms; valid rows are applied. A salary is only ever added: nothing is edited or deleted, and a mistake is put right with a later `CORRECTION`.
+- **Traceable.** Every salary an update adds points back to its import (file name, a SHA-256 of the file, who applied it, when, and the counts), so any salary can be traced to the file it came from. An import is only recorded when at least one salary is added.
+- **All or nothing.** Applying is one transaction, so a failure part-way leaves no half-applied update.
+- **People are not touched.** The update adds salaries to existing employees; it does not create, edit or end anyone's employment (requirements §4).
 
 ## 4. Data model (proposed)
 
-**Implemented so far:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`, `salary_records`, `salary_bands`, `fx_rates`. Only `imports` is left; it is designed with the import feature (M6). Tables are added one at a time, each reviewed and migrated separately; everything else below is still proposed.
+**Implemented:** `users`, `countries`, `departments`, `refresh_tokens`, `employees`, `salary_records`, `salary_bands`, `fx_rates` and `imports`: every table in this model exists. Tables were added one at a time, each reviewed and migrated separately.
 
 ```mermaid
 erDiagram
@@ -104,7 +109,7 @@ erDiagram
     date effective_from
     string reason "HIRE, PROMOTION, MERIT, MARKET_ADJUSTMENT or CORRECTION; null when an import gives none"
     uuid changed_by FK "null when loaded by the seed"
-    uuid import_id FK "added with the imports table; null unless an import created it"
+    uuid import_id FK "the bulk update that added it; null for a salary entered one at a time or loaded by the seed"
     timestamp created_at
   }
   SALARY_BAND {
@@ -117,14 +122,13 @@ erDiagram
   IMPORT {
     uuid id PK
     string file_name
-    uuid uploaded_by FK
-    string status "DRAFT, APPLIED or DISCARDED"
-    int rows_created
-    int rows_changed
-    int rows_unchanged
-    int rows_with_errors
+    string file_sha256 "SHA-256 of the file, char(64)"
+    uuid uploaded_by FK "who applied it"
     timestamp created_at
-    timestamp applied_at "null until committed"
+    int row_count "rows that asked for a change"
+    int applied_count "salaries added"
+    int unchanged_count "rows already at that salary"
+    int skipped_count "rows refused because of an error"
   }
   USER {
     uuid id PK
