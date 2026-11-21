@@ -7,7 +7,11 @@ import { useState } from 'react';
 import { Link as RouterLink, Outlet, useNavigate } from 'react-router';
 import { ApiError } from '../../../api/index.ts';
 import { paths } from '../../../app/paths.ts';
-import { DownloadIcon, UploadIcon } from '../../../components/icons.tsx';
+import {
+  DownloadIcon,
+  InsightsIcon,
+  UploadIcon,
+} from '../../../components/icons.tsx';
 import { DirectoryFilters } from '../components/DirectoryFilters.tsx';
 import {
   EmployeeTable,
@@ -97,6 +101,15 @@ export function DirectoryPage() {
                   : `${total} people`}
             </Typography>
           </Box>
+          <Button
+            component={RouterLink}
+            to={paths.insights}
+            variant="outlined"
+            color="secondary"
+            startIcon={<InsightsIcon />}
+          >
+            Pay insights
+          </Button>
           <Button
             component={RouterLink}
             to={paths.salaryUpdates}

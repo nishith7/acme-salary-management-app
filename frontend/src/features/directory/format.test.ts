@@ -7,6 +7,7 @@ import {
   formatMoney,
   formatTenureBand,
   formatUsd,
+  formatUsdCompact,
   salaryChangeTitle,
 } from './format.ts';
 
@@ -68,5 +69,14 @@ describe('salary history formatting', () => {
     expect(salaryChangeTitle('HIRE')).toBe('Joined ACME');
     expect(salaryChangeTitle('MARKET_ADJUSTMENT')).toBe('Market adjustment');
     expect(salaryChangeTitle(null)).toBe('Salary recorded');
+  });
+});
+
+describe('headline money', () => {
+  it('shows a big dollar amount in short form, to one decimal', () => {
+    expect(formatUsdCompact('693922954.66')).toBe('$693.9M');
+    // A trailing zero is dropped: $78M, not $78.0M.
+    expect(formatUsdCompact('78000006.00')).toBe('$78M');
+    expect(formatUsdCompact('40000.00')).toBe('$40K');
   });
 });

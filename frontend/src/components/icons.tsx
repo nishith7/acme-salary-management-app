@@ -33,3 +33,8 @@ export const BackIcon = createSvgIcon(
   <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" />,
   'Back',
 );
+
+export const InsightsIcon = createSvgIcon(
+  <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" />,
+  'Insights',
+);

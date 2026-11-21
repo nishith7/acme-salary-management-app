@@ -132,3 +132,15 @@ const REASON_TITLES: Record<SalaryChangeReason, string> = {
 export function salaryChangeTitle(reason: SalaryChangeReason | null): string {
   return reason ? REASON_TITLES[reason] : 'Salary recorded';
 }
+
+const usdCompactFormat = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** "693922954.66" -> "$693.9M". For a headline figure, where the exact amount would be noise. */
+export function formatUsdCompact(decimal: string): string {
+  return usdCompactFormat.format(exact(decimal));
+}
