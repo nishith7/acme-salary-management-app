@@ -46,6 +46,24 @@ const SORT_COLUMNS: Record<EmployeeQuery['sortBy'], Prisma.Sql> = {
 export class EmployeesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** The reference lists the directory's filters choose from, each by name. */
+  async filterOptions(): Promise<{
+    countries: { code: string; name: string }[];
+    departments: { name: string }[];
+  }> {
+    const [countries, departments] = await Promise.all([
+      this.prisma.country.findMany({
+        select: { code: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.department.findMany({
+        select: { name: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    return { countries, departments };
+  }
+
   /** `today` is a parameter so the result does not depend on the clock. */
   async list(
     query: EmployeeQuery,

@@ -1,4 +1,4 @@
-import { Body, Controller, QueryMethod } from '@nestjs/common';
+import { Body, Controller, Get, QueryMethod } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -14,6 +14,8 @@ import {
   type EmployeeQuery,
   employeeListResponseSchema,
   employeeQuerySchema,
+  type FilterOptionsResponse,
+  filterOptionsResponseSchema,
 } from './employees.schemas.js';
 import { EmployeesService } from './employees.service.js';
 
@@ -27,6 +29,21 @@ import { EmployeesService } from './employees.service.js';
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
+
+  // Declared before any `employees/:id` route added later, so "filter-options" is never read as an id.
+  @Get('filter-options')
+  @ApiOperation({
+    summary: 'List the values the directory filters accept',
+    description:
+      'Every country (code and name) and every department, by name, for the dropdowns of the employee directory. Small reference data, so it is not paged.',
+  })
+  @ApiOkResponse({
+    standardSchema: filterOptionsResponseSchema,
+    description: 'The countries and departments, each ordered by name.',
+  })
+  filterOptions(): Promise<FilterOptionsResponse> {
+    return this.employees.filterOptions();
+  }
 
   // The HTTP QUERY method: a safe, read-only request like GET, but the filters
   // travel in a JSON body, so there can be many of them and each can hold

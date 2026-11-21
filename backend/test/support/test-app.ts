@@ -23,6 +23,10 @@ export interface TestApp {
   findRefreshToken: ReturnType<typeof vi.fn>;
   /** Stand-in for prisma.refreshToken.updateMany, inside a transaction or not. */
   updateRefreshTokens: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.country.findMany. */
+  findCountries: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.department.findMany. */
+  findDepartments: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -42,10 +46,14 @@ export async function createTestApp(
   const createRefreshToken = vi.fn();
   const findRefreshToken = vi.fn();
   const updateRefreshTokens = vi.fn();
+  const findCountries = vi.fn();
+  const findDepartments = vi.fn();
 
   const prisma = {
     $queryRaw: queryRaw,
     user: { findUnique: findUser },
+    country: { findMany: findCountries },
+    department: { findMany: findDepartments },
     refreshToken: {
       create: createRefreshToken,
       findUnique: findRefreshToken,
@@ -74,5 +82,7 @@ export async function createTestApp(
     createRefreshToken,
     findRefreshToken,
     updateRefreshTokens,
+    findCountries,
+    findDepartments,
   };
 }

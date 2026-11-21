@@ -5,11 +5,21 @@ import type {
   EmployeeListItem,
   EmployeeListResponse,
   EmployeeQuery,
+  FilterOptionsResponse,
 } from './employees.schemas.js';
 
 @Injectable()
 export class EmployeesService {
   constructor(private readonly employees: EmployeesRepository) {}
+
+  /** What the directory's country and department filters can be set to. */
+  async filterOptions(): Promise<FilterOptionsResponse> {
+    const { countries, departments } = await this.employees.filterOptions();
+    return {
+      countries,
+      departments: departments.map((department) => department.name),
+    };
+  }
 
   /** One page of the directory, with the current salary as of today. */
   async list(query: EmployeeQuery): Promise<EmployeeListResponse> {

@@ -139,6 +139,16 @@ export const employeeSchema = z.object({
 });
 export type EmployeeListItem = z.infer<typeof employeeSchema>;
 
+export const filterOptionsResponseSchema = z.object({
+  countries: z
+    .array(z.object({ code: z.string(), name: z.string() }))
+    .describe('Every country, by name. Send `code` as a `countries` filter.'),
+  departments: z
+    .array(z.string())
+    .describe('Every department, by name. Send it as a `departments` filter.'),
+});
+export type FilterOptionsResponse = z.infer<typeof filterOptionsResponseSchema>;
+
 export const employeeListResponseSchema = z.object({
   items: z.array(employeeSchema),
   page: z.int(),

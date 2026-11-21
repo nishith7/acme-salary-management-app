@@ -86,3 +86,67 @@ describe('QUERY /employees (e2e)', () => {
     });
   });
 });
+
+/** The values the directory's filter dropdowns offer: a plain GET, nothing to send. */
+describe('GET /employees/filter-options (e2e)', () => {
+  const jwt = new JwtService({ secret: TEST_JWT_SECRET });
+  let testApp: TestApp;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    testApp = await createTestApp();
+    const server = testApp.app.getHttpServer() as unknown as Server;
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(() => {
+    testApp.findCountries
+      .mockReset()
+      .mockResolvedValue([{ code: 'IN', name: 'India' }]);
+    testApp.findDepartments
+      .mockReset()
+      .mockResolvedValue([{ name: 'Engineering' }, { name: 'Finance' }]);
+  });
+
+  const get = async (role?: 'HR_ADMIN' | 'EMPLOYEE') =>
+    fetch(`${baseUrl}/employees/filter-options`, {
+      headers: role
+        ? {
+            authorization: `Bearer ${await jwt.signAsync(
+              { sub: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11', role },
+              { algorithm: 'HS256', expiresIn: 900 },
+            )}`,
+          }
+        : {},
+    });
+
+  it('refuses a request with no access token', async () => {
+    const response = await get();
+
+    expect(response.status).toBe(401);
+    expect(testApp.findCountries).not.toHaveBeenCalled();
+  });
+
+  it('refuses a user who is not an HR admin', async () => {
+    const response = await get('EMPLOYEE');
+
+    expect(response.status).toBe(403);
+    expect(testApp.findCountries).not.toHaveBeenCalled();
+    expect(testApp.findDepartments).not.toHaveBeenCalled();
+  });
+
+  it('gives an HR admin the countries (code and name) and the department names', async () => {
+    const response = await get('HR_ADMIN');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      countries: [{ code: 'IN', name: 'India' }],
+      departments: ['Engineering', 'Finance'],
+    });
+  });
+});
