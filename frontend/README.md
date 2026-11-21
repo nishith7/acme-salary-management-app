@@ -2,7 +2,7 @@
 
 React 19 + Vite 8 + TypeScript, with Material UI (see `docs/tech-stack.md`, decisions 15 to
 17). Built so far: the API client, the theme, sign-in with protected routes, and a
-placeholder employee page. The employee directory is next.
+the employee table (paging and sorting). Filters and search are next.
 
 ## Source layout
 
@@ -13,7 +13,8 @@ src/
   components/ shared UI that knows nothing about a feature (BrandLogo, FullPageLoader)
   features/   one folder per feature, each with its own components/ and pages/
     auth/       session state, RequireAuth and PublicOnly (the route guards), the login page
-    directory/  the employee directory (a placeholder for now)
+    directory/  the employee table: columns, cell parts, formatting, the query hook, the page,
+                and the search box and filters above it (`filters.ts` turns them into the request body)
   layouts/    frames around screens (AppShell: top bar, who is signed in, sign out)
   pages/      screens that belong to no feature (not found, no access)
   theme/      the MUI theme: palette.ts, typography.ts, components.ts
@@ -35,6 +36,20 @@ user off the login page. The guards are a courtesy: the API checks every call ag
 is what protects the data. When a session ends, by sign-out or because the server refused to
 renew it, the data cache is cleared so the next person on this browser sees nothing of it.
 
+## First time
+
+Copy `.env.example` to `.env` (git ignores it, as with the backend) and start the backend.
+One value is required and has **no default**, because a wrong guess looks like the API being
+down or like being signed out:
+
+| Variable       | What it is                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `VITE_API_URL` | the backend's address, `http://localhost:<PORT>` (`PORT` in `backend/.env`, default 3000) |
+
+The app refuses to load without it, and says so. The tests and the build do not need it (the
+tests set their own). The backend must allow the frontend's address: put
+`CORS_ORIGINS=http://localhost:5173` in `backend/.env` (it is in `backend/.env.example`).
+
 ## Commands
 
 | Command                | Purpose                                           |
@@ -50,12 +65,13 @@ Before every commit: `npm run lint && npm run format:check && npm test && npm ru
 
 ## Talking to the API
 
-In development Vite forwards `/api/*` to the backend (`http://localhost:3000`, change it
-with `DEV_API_URL`), so the browser only ever talks to one origin. The proxy also rewrites
-the refresh cookie's path from `/auth` to `/api/auth`: the API scopes that cookie to
-`/auth`, and the browser would otherwise not send it to `/api/auth/refresh`.
+The browser calls the backend directly, at the address in `VITE_API_URL`: what you see in the
+browser's network tab is `http://localhost:3000/auth/login`, and so on. The frontend and the
+backend are on different ports, so the backend lists the frontend's address in `CORS_ORIGINS`
+and the client sends the refresh cookie with each call (`withCredentials`). A different port on
+`localhost` is the same site, so the cookie (SameSite=Strict) is still sent.
 
-Environment variables are listed in `.env.example`.
+Environment variables, and what each one is for, are in `.env.example`.
 
 ## CI and deploy
 
@@ -67,6 +83,8 @@ Environment variables are listed in `.env.example`.
 
 **Caveat for Pages:** the site (`<user>.github.io`) and the API are different sites, so the
 refresh cookie becomes a third-party cookie, which Safari and some other browsers block.
-Behind a host that proxies `/api/*` to the API (such as Vercel) it stays first-party. In
-production that proxy also needs the cookie path fixed, which the API does not support yet
-(see `docs/plan.md`, M9).
+The same applies to any host where the site and the API are on different sites, such as
+Vercel and Render. Production needs one of: the site and the API under one site (for example
+`app.example.com` and `api.example.com`), or a host that forwards `/api/*` to the API (then
+`VITE_API_URL=/api`, and the cookie path must be fixed too), or a cookie that allows
+cross-site use (`SameSite=None; Secure`). That is decided at M9 (see `docs/plan.md`).
