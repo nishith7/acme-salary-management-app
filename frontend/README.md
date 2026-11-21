@@ -1,8 +1,9 @@
 # ACME Salary Management: frontend
 
 React 19 + Vite 8 + TypeScript, with Material UI (see `docs/tech-stack.md`, decisions 15 to
-17). Built so far: the API client, the theme, sign-in with protected routes, and a
-the employee table (paging and sorting). Filters and search are next.
+17). Built so far: the API client, the theme, sign-in with protected routes, and the
+employee directory (table with paging and sorting, search and filters). The summary cards,
+the employee profile and editing come later.
 
 ## Source layout
 
