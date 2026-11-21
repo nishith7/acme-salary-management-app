@@ -1,7 +1,9 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
+import { Outlet, useNavigate } from 'react-router';
 import { ApiError } from '../../../api/index.ts';
+import { paths } from '../../../app/paths.ts';
 import { DirectoryFilters } from '../components/DirectoryFilters.tsx';
 import {
   EmployeeTable,
@@ -19,6 +21,7 @@ import { useEmployees } from '../use-employees.ts';
 const countFormat = new Intl.NumberFormat('en-US');
 
 export function DirectoryPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [pagination, setPagination] = useState<TablePagination>({
     page: 1,
@@ -95,9 +98,12 @@ export function DirectoryPage() {
             onSortChange={handleSortChange}
             error={error}
             onRetry={() => void employees.refetch()}
+            onOpenEmployee={(id) => void navigate(paths.employee(id))}
           />
         </Box>
       </Box>
+      {/* The open profile, if the address names one (see routes.tsx). */}
+      <Outlet />
     </>
   );
 }

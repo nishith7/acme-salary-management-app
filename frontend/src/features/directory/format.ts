@@ -1,4 +1,8 @@
-import type { BandPosition, TenureBand } from '../../api/employees.ts';
+import type {
+  BandPosition,
+  SalaryChangeReason,
+  TenureBand,
+} from '../../api/employees.ts';
 
 // How the directory shows what the API sends. Money arrives as a decimal string and is only
 // ever formatted, never turned into a calculation, and dates arrive as "YYYY-MM-DD".
@@ -75,4 +79,56 @@ export function formatAmount(decimal: string): string {
 /** "54216.87" -> "$54,217". Rounded to whole dollars: this is for comparing, not auditing. */
 export function formatUsd(decimal: string): string {
   return usdFormat.format(exact(decimal));
+}
+
+const moneyFormats = new Map<string, Intl.NumberFormat>();
+
+/**
+ * "88000.00", "EUR" -> "€88,000"; "102800.50", "EUR" -> "€102,800.50"; "87000.00", "SGD" ->
+ * "SGD 87,000". The symbol or code comes from the currency itself. A whole amount shows no
+ * decimals and any other shows exactly two (never "€102,800.5"). A code the browser does not
+ * know is shown as plain text before the number.
+ */
+export function formatMoney(decimal: string, currencyCode: string): string {
+  const whole = /^[^.]*(\.0+)?$/.test(decimal);
+  const key = `${currencyCode}:${whole}`;
+  let format = moneyFormats.get(key);
+  if (!format) {
+    try {
+      format = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currencyCode,
+        minimumFractionDigits: whole ? 0 : 2,
+        maximumFractionDigits: whole ? 0 : 2,
+      });
+    } catch {
+      return `${currencyCode} ${formatAmount(decimal)}`;
+    }
+    moneyFormats.set(key, format);
+  }
+  return format.format(exact(decimal));
+}
+
+/**
+ * "8.1" -> "+8.1%", "-2.5" -> "−2.5%" (a real minus sign), "0.0" -> "0.0%". The API sends the
+ * percentage as text, worked out exactly in the database, so this only adds the sign.
+ */
+export function formatChangePercent(percent: string): string {
+  if (percent.startsWith('-')) {
+    return `−${percent.slice(1)}%`;
+  }
+  return Number(percent) === 0 ? `${percent}%` : `+${percent}%`;
+}
+
+const REASON_TITLES: Record<SalaryChangeReason, string> = {
+  HIRE: 'Joined ACME',
+  PROMOTION: 'Promotion',
+  MERIT: 'Merit increase',
+  MARKET_ADJUSTMENT: 'Market adjustment',
+  CORRECTION: 'Correction',
+};
+
+/** What a step of the salary history is called. No reason (a spreadsheet upload) gets a plain title. */
+export function salaryChangeTitle(reason: SalaryChangeReason | null): string {
+  return reason ? REASON_TITLES[reason] : 'Salary recorded';
 }

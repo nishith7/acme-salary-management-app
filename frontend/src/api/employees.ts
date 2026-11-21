@@ -77,6 +77,43 @@ export interface EmployeeListItem {
   bandPosition: BandPosition | null;
 }
 
+export const SALARY_CHANGE_REASONS = [
+  'HIRE',
+  'PROMOTION',
+  'MERIT',
+  'MARKET_ADJUSTMENT',
+  'CORRECTION',
+] as const;
+export type SalaryChangeReason = (typeof SALARY_CHANGE_REASONS)[number];
+
+/** One salary an employee has been on. */
+export interface SalaryHistoryEntry {
+  id: string;
+  /** Annual gross in `currencyCode`: a decimal string, never a float. */
+  annualAmount: string;
+  currencyCode: string;
+  /** YYYY-MM-DD */
+  effectiveFrom: string;
+  /** Null for a salary loaded without a reason, for example from a spreadsheet. */
+  reason: SalaryChangeReason | null;
+  /** Name of the user who recorded it; null when the seed loaded it. */
+  changedBy: string | null;
+  /** The salary before this one in time; null for the first. */
+  previous: { annualAmount: string; currencyCode: string } | null;
+  /**
+   * The change from `previous` as a percentage with one decimal, as text ("8.1", "-2.5").
+   * Null for the first salary and when the currency changed.
+   */
+  changePercent: string | null;
+  /** CURRENT is in force today, SCHEDULED starts after today, PAST was replaced. */
+  state: 'CURRENT' | 'PAST' | 'SCHEDULED';
+}
+
+/** One employee as the directory shows them, plus the whole salary history (newest first). */
+export interface EmployeeProfile extends EmployeeListItem {
+  salaryHistory: SalaryHistoryEntry[];
+}
+
 export interface EmployeeListResponse {
   items: EmployeeListItem[];
   page: number;
@@ -99,6 +136,16 @@ export function createEmployeesApi(client: ApiClient) {
       const { data } = await client.http.request<FilterOptions>({
         method: 'GET',
         url: '/employees/filter-options',
+        signal,
+      });
+      return data;
+    },
+
+    /** One employee with their salary history. Rejects with a 404 `ApiError` if there is no such employee. */
+    async get(id: string, signal?: AbortSignal): Promise<EmployeeProfile> {
+      const { data } = await client.http.request<EmployeeProfile>({
+        method: 'GET',
+        url: `/employees/${encodeURIComponent(id)}`,
         signal,
       });
       return data;

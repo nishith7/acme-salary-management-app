@@ -44,6 +44,8 @@ interface EmployeeTableProps {
   /** A message to show instead of the table when the page could not be loaded. */
   error?: string | null;
   onRetry?: () => void;
+  /** Called with the employee's id when a row is clicked. */
+  onOpenEmployee?: (id: string) => void;
 }
 
 function NoEmployees() {
@@ -70,6 +72,7 @@ export function EmployeeTable({
   onSortChange,
   error,
   onRetry,
+  onOpenEmployee,
 }: EmployeeTableProps) {
   // The same objects between renders unless the values change. With a fresh object on every
   // render the table jumped back to page 1 after each page change (reproduced by the
@@ -133,13 +136,26 @@ export function EmployeeTable({
       // The column menu only offers filtering and hiding columns; filters are the page's.
       disableColumnMenu
       disableRowSelectionOnClick
+      onRowClick={({ id }, event) => {
+        // The name is a real link (so it can be reached with the keyboard and opened in a new
+        // tab); it navigates by itself, and the row must not navigate a second time.
+        if ((event.target as HTMLElement).closest('a')) {
+          return;
+        }
+        onOpenEmployee?.(String(id));
+      }}
       rowHeight={56}
       columnHeaderHeight={44}
       getRowClassName={({ row }) =>
         row.status === 'TERMINATED' ? 'is-terminated' : ''
       }
       slots={{ noRowsOverlay: NoEmployees }}
-      sx={{ '& .is-terminated .MuiDataGrid-cell': { color: 'text.secondary' } }}
+      sx={{
+        '& .is-terminated .MuiDataGrid-cell': { color: 'text.secondary' },
+        '& .MuiDataGrid-row': {
+          cursor: onOpenEmployee ? 'pointer' : 'default',
+        },
+      }}
     />
   );
 }

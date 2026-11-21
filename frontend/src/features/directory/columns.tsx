@@ -1,6 +1,9 @@
+import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import type { GridColDef } from '@mui/x-data-grid';
+import { Link as RouterLink } from 'react-router';
 import type { EmployeeListItem } from '../../api/employees.ts';
+import { paths } from '../../app/paths.ts';
 import {
   BandPositionCell,
   CellFrame,
@@ -28,7 +31,20 @@ export const employeeColumns: GridColDef<EmployeeListItem>[] = [
     flex: 1.3,
     minWidth: 176,
     renderCell: ({ row }) => (
-      <TwoLine strong primary={row.fullName} secondary={row.employeeCode} />
+      <TwoLine
+        strong
+        primary={
+          <Link
+            component={RouterLink}
+            to={paths.employee(row.id)}
+            color="inherit"
+            underline="hover"
+          >
+            {row.fullName}
+          </Link>
+        }
+        secondary={row.employeeCode}
+      />
     ),
   },
   { field: 'jobTitle', headerName: 'Job title', flex: 1.2, minWidth: 150 },

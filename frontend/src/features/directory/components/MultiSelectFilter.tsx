@@ -54,6 +54,8 @@ export function MultiSelectFilter({
   return (
     <FormControl
       size="small"
+      // The ink colour, as the theme sets it for text fields: a red ring would look like an error.
+      color="secondary"
       sx={{ flex: '0 1 200px', minWidth: 160 }}
       disabled={disabled}
     >

@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { SORT_FIELDS, type EmployeeListItem } from '../../../api/employees.ts';
 import { employeeColumns } from '../columns.tsx';
@@ -33,17 +34,20 @@ const person: EmployeeListItem = {
 function renderTable(props: Partial<Parameters<typeof EmployeeTable>[0]> = {}) {
   const onPaginationChange = vi.fn();
   const onSortChange = vi.fn();
+  // The name is a link to the profile, so the table needs a router around it.
   render(
-    <EmployeeTable
-      rows={[person]}
-      total={100}
-      loading={false}
-      pagination={{ page: 1, pageSize: 25 }}
-      sort={{ sortBy: 'fullName', sortOrder: 'asc' }}
-      onPaginationChange={onPaginationChange}
-      onSortChange={onSortChange}
-      {...props}
-    />,
+    <MemoryRouter>
+      <EmployeeTable
+        rows={[person]}
+        total={100}
+        loading={false}
+        pagination={{ page: 1, pageSize: 25 }}
+        sort={{ sortBy: 'fullName', sortOrder: 'asc' }}
+        onPaginationChange={onPaginationChange}
+        onSortChange={onSortChange}
+        {...props}
+      />
+    </MemoryRouter>,
   );
   return { onPaginationChange, onSortChange };
 }
@@ -59,7 +63,7 @@ function Harness() {
     sortOrder: 'asc',
   });
   return (
-    <>
+    <MemoryRouter>
       <output data-testid="state">{`page ${pagination.page}, ${pagination.pageSize} rows, ${sort.sortBy} ${sort.sortOrder}`}</output>
       <EmployeeTable
         rows={[person]}
@@ -74,7 +78,7 @@ function Harness() {
           setPagination((current) => ({ ...current, page: 1 }));
         }}
       />
-    </>
+    </MemoryRouter>
   );
 }
 

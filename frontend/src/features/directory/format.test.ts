@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   bandPositionLabel,
   formatAmount,
+  formatChangePercent,
   formatDate,
+  formatMoney,
   formatTenureBand,
   formatUsd,
+  salaryChangeTitle,
 } from './format.ts';
 
 describe('directory formatting', () => {
@@ -38,5 +41,32 @@ describe('directory formatting', () => {
     expect(bandPositionLabel('BELOW')).toBe('Below band');
     expect(bandPositionLabel('WITHIN')).toBe('Within band');
     expect(bandPositionLabel('ABOVE')).toBe('Above band');
+  });
+});
+
+describe('salary history formatting', () => {
+  it('shows an amount in its own currency, with decimals only when the stored amount has them', () => {
+    expect(formatMoney('48700.00', 'GBP')).toBe('£48,700');
+    expect(formatMoney('102800.50', 'EUR')).toBe('€102,800.50');
+    // A non-breaking space, so the code and the number never wrap apart.
+    expect(formatMoney('87000.00', 'SGD')).toBe('SGD 87,000');
+  });
+
+  it('shows the code before the number when the browser does not know the currency', () => {
+    expect(formatMoney('1500.00', 'not-a-currency')).toBe(
+      'not-a-currency 1,500',
+    );
+  });
+
+  it('adds only the sign to a percentage the API has already worked out', () => {
+    expect(formatChangePercent('8.1')).toBe('+8.1%');
+    expect(formatChangePercent('-2.5')).toBe('−2.5%');
+    expect(formatChangePercent('0.0')).toBe('0.0%');
+  });
+
+  it('names a step by its reason, and plainly when there is none', () => {
+    expect(salaryChangeTitle('HIRE')).toBe('Joined ACME');
+    expect(salaryChangeTitle('MARKET_ADJUSTMENT')).toBe('Market adjustment');
+    expect(salaryChangeTitle(null)).toBe('Salary recorded');
   });
 });
