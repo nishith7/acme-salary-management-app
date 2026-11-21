@@ -15,7 +15,7 @@ declare module 'axios' {
 }
 
 export interface ApiClientOptions {
-  /** Where the API lives: `/api` behind a proxy, or a full URL when the site is on another host. */
+  /** The API's address, from VITE_API_URL: where the browser sends every call. */
   baseURL: string;
   /** Replaces axios's network layer. For tests only. */
   adapter?: AxiosAdapter;
@@ -46,8 +46,8 @@ export function createApiClient({
   adapter,
   timeout = 60_000,
 }: ApiClientOptions): ApiClient {
-  // withCredentials lets the refresh cookie travel when the API is on another origin.
-  // Behind a same-origin proxy it changes nothing.
+  // withCredentials lets the refresh cookie travel to the API, which is on another origin
+  // (another port in development). The backend allows this site in CORS_ORIGINS.
   const settings = { baseURL, adapter, timeout, withCredentials: true };
   const http = axios.create(settings);
   // No interceptors: this one only refreshes, and a 401 from it must not start a refresh.

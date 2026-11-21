@@ -11,23 +11,15 @@ export default defineConfig(({ mode }) => {
     // VITE_BASE_PATH. Everywhere else the site lives at the root.
     base: env.VITE_BASE_PATH || '/',
     plugins: [react()],
-    server: {
-      proxy: {
-        // In development the browser talks only to Vite, so the refresh cookie the API
-        // sets is first-party, as it must be behind a production proxy too.
-        '/api': {
-          target: env.DEV_API_URL || 'http://localhost:3000',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
-          // The API scopes the refresh cookie to Path=/auth, but the browser calls
-          // /api/auth/refresh, so without this rewrite it would never send the cookie.
-          cookiePathRewrite: { '/auth': '/api/auth' },
-        },
-      },
-    },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
+      // Tests run west of Greenwich on purpose, so a calendar date that is read as a moment
+      // (and so shifts to the day before) fails here, not on a user's laptop. CI runs in UTC,
+      // where that bug would pass unnoticed.
+      // VITE_API_URL has no default in the app, so the tests give it one. It is never
+      // reached: tests stub the API.
+      env: { TZ: 'America/Los_Angeles', VITE_API_URL: 'http://localhost:3000' },
     },
   };
 });
