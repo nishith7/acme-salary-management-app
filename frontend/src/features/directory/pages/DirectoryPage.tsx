@@ -18,6 +18,7 @@ import {
   type TablePagination,
   type TableSort,
 } from '../components/EmployeeTable.tsx';
+import { SummaryCards } from '../components/SummaryCards.tsx';
 import {
   NO_FILTERS,
   hasActiveFilters,
@@ -40,8 +41,10 @@ export function DirectoryPage() {
     sortBy: 'fullName',
     sortOrder: 'asc',
   });
+  // What the filters ask for, shared by the table and the cards above it.
+  const filterQuery = toEmployeeFilterQuery(filters);
   const employees = useEmployees({
-    ...toEmployeeFilterQuery(filters),
+    ...filterQuery,
     ...pagination,
     ...sort,
   });
@@ -129,6 +132,7 @@ export function DirectoryPage() {
             Export CSV
           </Button>
         </Box>
+        <SummaryCards query={filterQuery} />
         <DirectoryFilters filters={filters} onChange={handleFiltersChange} />
         <Box sx={{ flex: 1, minHeight: 0 }}>
           <EmployeeTable

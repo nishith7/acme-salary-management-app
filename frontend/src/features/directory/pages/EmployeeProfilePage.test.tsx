@@ -87,6 +87,13 @@ beforeEach(() => {
     levels: [],
     jobTitles: [],
   });
+  vi.spyOn(employeesApi, 'summary').mockResolvedValue({
+    headcount: 0,
+    counted: 0,
+    totalAnnualUsd: null,
+    medianUsd: null,
+    averageUsd: null,
+  });
   vi.spyOn(employeesApi, 'list').mockResolvedValue({
     items: [person],
     page: 1,
@@ -260,6 +267,12 @@ describe('editing a salary from the profile', () => {
       expect(screen.queryByRole('dialog', { name: /edit salary/i })).toBeNull(),
     );
     expect(await screen.findByText(/salary saved/i)).toBeInTheDocument();
+    // The cards behind the panel ask again, so they do not keep showing the old total.
+    await waitFor(() =>
+      expect(vi.mocked(employeesApi.summary).mock.calls.length).toBeGreaterThan(
+        1,
+      ),
+    );
     const steps = within(await openProfile()).getAllByRole('listitem');
     expect(steps).toHaveLength(4);
     expect(steps[0]).toHaveTextContent('Market adjustment');

@@ -110,6 +110,13 @@ beforeEach(() => {
     levels: [],
     jobTitles: [],
   });
+  vi.spyOn(employeesApi, 'summary').mockResolvedValue({
+    headcount: 0,
+    counted: 0,
+    totalAnnualUsd: null,
+    medianUsd: null,
+    averageUsd: null,
+  });
 });
 
 afterEach(() => {

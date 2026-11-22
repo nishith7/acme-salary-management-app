@@ -2,9 +2,9 @@
 
 React 19 + Vite 8 + TypeScript, with Material UI (see `docs/tech-stack.md`, decisions 15 to
 17). Built so far: the API client, the theme, sign-in with protected routes, and the
-employee directory (table with paging and sorting, search and filters, a profile panel with
-the salary history, and recording a salary change). The summary cards and adding, editing and
-terminating employees come later.
+employee directory (summary cards, table with paging and sorting, search and filters, a profile
+panel with the salary history, and recording a salary change). Adding, editing and terminating
+employees are not in the app (requirements section 4).
 
 ## Source layout
 
@@ -16,7 +16,7 @@ src/
   features/   one folder per feature, each with its own components/ and pages/
     auth/       session state, RequireAuth and PublicOnly (the route guards), the login page
     directory/  the employee table: columns, cell parts, formatting, the query hook, the page,
-                and the search box and filters above it (`filters.ts` turns them into the request body)
+                the summary cards and the search box and filters above it (`filters.ts` turns them into the request body)
     salary-updates/  the bulk salary update: download the template, choose a CSV, see every row checked
     insights/  pay by country, department and level (medians and quartiles in US dollars) and the gender pay gap by level; groups under 5 people hidden
   layouts/    frames around screens (AppShell: top bar, who is signed in, sign out)

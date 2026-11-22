@@ -14,6 +14,7 @@ function lastQuery(list: ReturnType<typeof vi.spyOn>) {
 }
 
 let list: ReturnType<typeof vi.spyOn>;
+let summary: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.spyOn(authApi, 'restoreSession').mockResolvedValue({
@@ -34,6 +35,13 @@ beforeEach(() => {
     departments: ['Engineering', 'Finance'],
     levels: [1, 3, 10],
     jobTitles: ['Analyst', 'Engineer'],
+  });
+  summary = vi.spyOn(employeesApi, 'summary').mockResolvedValue({
+    headcount: 10000,
+    counted: 9426,
+    totalAnnualUsd: '693900000.00',
+    medianUsd: '67507.36',
+    averageUsd: '73617.97',
   });
   // 1,000 matches, so there are pages to move between.
   list = vi
@@ -210,6 +218,93 @@ describe('the pay band, level, tenure and job title filters', () => {
     expect(
       screen.getByRole('button', { name: 'More filters' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('the summary cards', () => {
+  const cards = () => screen.findByRole('region', { name: /summary/i });
+
+  it('show how many people match and what the current ones are paid, in plain words', async () => {
+    await openDirectory();
+
+    const region = await cards();
+
+    expect(await within(region).findByText('10,000')).toBeInTheDocument();
+    expect(within(region).getByText('Employees')).toBeInTheDocument();
+    expect(
+      within(region).getByText('9,426 current with a salary'),
+    ).toBeInTheDocument();
+    expect(within(region).getByText('Total annual salary')).toBeInTheDocument();
+    expect(within(region).getByText('$693.9M')).toBeInTheDocument();
+    expect(within(region).getByText('Median salary')).toBeInTheDocument();
+    expect(within(region).getByText('$67,507')).toBeInTheDocument();
+    expect(within(region).getByText('Average salary')).toBeInTheDocument();
+    expect(within(region).getByText('$73,618')).toBeInTheDocument();
+  });
+
+  it('follow the filters, and send nothing but the filters (no paging, no sort)', async () => {
+    const user = userEvent.setup();
+    await openDirectory();
+    await screen.findByText('10,000');
+
+    await choose(user, 'Country', 'India');
+
+    await waitFor(() =>
+      expect(summary.mock.lastCall?.[0]).toEqual({ countries: ['IN'] }),
+    );
+  });
+
+  it('show a dash and say why instead of the money of fewer than 5 people', async () => {
+    summary.mockResolvedValue({
+      headcount: 3,
+      counted: 3,
+      totalAnnualUsd: null,
+      medianUsd: null,
+      averageUsd: null,
+    });
+    await openDirectory();
+
+    const region = await cards();
+
+    expect(
+      await within(region).findByText('3 current with a salary'),
+    ).toBeInTheDocument();
+    expect(within(region).getAllByText('—')).toHaveLength(3);
+    expect(
+      within(region).getAllByText('Shown for 5 or more current employees'),
+    ).toHaveLength(3);
+  });
+
+  it('say so when nobody current matches, for example when only people who left do', async () => {
+    summary.mockResolvedValue({
+      headcount: 574,
+      counted: 0,
+      totalAnnualUsd: null,
+      medianUsd: null,
+      averageUsd: null,
+    });
+    await openDirectory();
+
+    const region = await cards();
+
+    expect(await within(region).findByText('574')).toBeInTheDocument();
+    expect(
+      within(region).getAllByText('No current employees match'),
+    ).toHaveLength(3);
+  });
+
+  it('offer to try again when they could not be loaded, and show them once they load', async () => {
+    // A 4xx is not retried by the app, so the failure shows at once.
+    summary.mockRejectedValueOnce(new ApiError(403, 'Forbidden'));
+    const user = userEvent.setup();
+    await openDirectory();
+
+    expect(
+      await screen.findByText(/could not load the summary/i),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('$67,507')).toBeInTheDocument();
   });
 });
 

@@ -51,6 +51,12 @@ export interface EmployeeQuery {
   pageSize?: number;
 }
 
+/** The body of `QUERY /employees/summary`: the list's filters, with no paging and no sort. */
+export type EmployeeSummaryQuery = Omit<
+  EmployeeQuery,
+  'page' | 'pageSize' | 'sortBy' | 'sortOrder'
+>;
+
 /** The body of `QUERY /employees/export`: the list's filters and sort, with no paging (everyone who matches). */
 export type EmployeeExportQuery = Omit<EmployeeQuery, 'page' | 'pageSize'>;
 
@@ -147,6 +153,18 @@ export interface FilterOptions {
   jobTitles: string[];
 }
 
+/** The cards above the directory: how many people match, and what the current ones are paid. */
+export interface EmployeeSummary {
+  /** Everyone who matches the filters, whether still employed or not. */
+  headcount: number;
+  /** Of them, the current employees with a salary and an exchange rate: the people the money is about. */
+  counted: number;
+  /** Annual salaries in US dollars, as decimal strings; all three are null for fewer than 5 people. */
+  totalAnnualUsd: string | null;
+  medianUsd: string | null;
+  averageUsd: string | null;
+}
+
 export function createEmployeesApi(client: ApiClient) {
   return {
     async filterOptions(signal?: AbortSignal): Promise<FilterOptions> {
@@ -172,6 +190,21 @@ export function createEmployeesApi(client: ApiClient) {
         data: query,
         headers: { 'Content-Type': 'application/json' },
         responseType: 'blob',
+        signal,
+      });
+      return data;
+    },
+
+    /** The summary cards for the filters: a read-only request with the filters in a JSON body, like the list. */
+    async summary(
+      query: EmployeeSummaryQuery,
+      signal?: AbortSignal,
+    ): Promise<EmployeeSummary> {
+      const { data } = await client.http.request<EmployeeSummary>({
+        method: 'QUERY',
+        url: '/employees/summary',
+        data: query,
+        headers: { 'Content-Type': 'application/json' },
         signal,
       });
       return data;
