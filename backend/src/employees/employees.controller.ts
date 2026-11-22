@@ -28,11 +28,15 @@ import {
   type EmployeeListResponse,
   type EmployeeProfile,
   type EmployeeQuery,
+  type EmployeeSummary,
+  type EmployeeSummaryQuery,
   employeeExportQuerySchema,
   employeeIdSchema,
   employeeListResponseSchema,
   employeeProfileSchema,
   employeeQuerySchema,
+  employeeSummaryQuerySchema,
+  employeeSummaryResponseSchema,
   type FilterOptionsResponse,
   filterOptionsResponseSchema,
   type SalaryChangeRequest,
@@ -104,6 +108,25 @@ export class EmployeesController {
     @Body({ schema: employeeExportQuerySchema }) query: EmployeeExportQuery,
   ): Promise<string> {
     return this.employees.exportCsv(query);
+  }
+
+  // The cards above the table: the list's filters in the same body (no paging, no sort), one
+  // small answer. QUERY like the list, for the same reason.
+  @QueryMethod('summary')
+  @ApiOperation({
+    summary: 'Summarise the employees who match the filters',
+    description:
+      'How many people match the filters (the same body as the list, without paging or sort), and the total, median and average annual salary in US dollars of the current employees among them, the same figures as the Pay insights page. People who have left, and people with no salary or exchange rate, are counted in `headcount` but not in the money. The money is null for fewer than 5 people (the privacy rule).',
+  })
+  @ApiOkResponse({
+    standardSchema: employeeSummaryResponseSchema,
+    description: 'The headcount and the money figures.',
+  })
+  @ApiBadRequestResponse({ description: 'The body is invalid.' })
+  summary(
+    @Body({ schema: employeeSummaryQuerySchema }) query: EmployeeSummaryQuery,
+  ): Promise<EmployeeSummary> {
+    return this.employees.summary(query);
   }
 
   @Post(':id/salary-changes')

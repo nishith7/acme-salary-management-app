@@ -113,6 +113,50 @@ export const employeeExportQuerySchema = employeeQuerySchema
   });
 export type EmployeeExportQuery = z.output<typeof employeeExportQuerySchema>;
 
+/** The summary cards take the list's filters and nothing else: no paging, no sort. */
+export const employeeSummaryQuerySchema = employeeQuerySchema
+  .omit({ page: true, pageSize: true, sortBy: true, sortOrder: true })
+  .meta({
+    example: {
+      statuses: ['ACTIVE'],
+      countries: ['IN', 'US'],
+      departments: ['Engineering'],
+    },
+  });
+export type EmployeeSummaryQuery = z.output<typeof employeeSummaryQuerySchema>;
+
+export const employeeSummaryResponseSchema = z.object({
+  headcount: z
+    .int()
+    .describe(
+      'Everyone who matches the filters, whether still employed or not.',
+    ),
+  counted: z
+    .int()
+    .describe(
+      'Of them, the current employees with a salary and an exchange rate: the people the money figures are about.',
+    ),
+  totalAnnualUsd: z
+    .string()
+    .nullable()
+    .describe(
+      'The sum of their annual salaries in US dollars, as a decimal string. Null for fewer than 5 people.',
+    ),
+  medianUsd: z
+    .string()
+    .nullable()
+    .describe(
+      'Their median annual salary in US dollars. Null for fewer than 5 people.',
+    ),
+  averageUsd: z
+    .string()
+    .nullable()
+    .describe(
+      'Their average annual salary in US dollars, rounded to cents. Null for fewer than 5 people.',
+    ),
+});
+export type EmployeeSummary = z.infer<typeof employeeSummaryResponseSchema>;
+
 export const employeeSchema = z.object({
   id: z.uuid(),
   employeeCode: z.string(),

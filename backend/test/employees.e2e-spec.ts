@@ -580,3 +580,109 @@ describe('QUERY /employees/export (e2e)', () => {
     expect(testApp.queryRaw).toHaveBeenCalledTimes(1);
   });
 });
+
+/** The summary cards above the table: `QUERY /employees/summary`, the list's filters without paging or sort. */
+describe('QUERY /employees/summary (e2e)', () => {
+  const jwt = new JwtService({ secret: TEST_JWT_SECRET });
+  let testApp: TestApp;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    testApp = await createTestApp();
+    const server = testApp.app.getHttpServer() as unknown as Server;
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await testApp.app.close();
+  });
+
+  beforeEach(() => {
+    testApp.queryRaw.mockReset().mockResolvedValue([
+      {
+        headcount: 10000,
+        counted: 9426,
+        totalAnnualUsd: '693900000.00',
+        medianUsd: '67507.00',
+        averageUsd: '73614.25',
+      },
+    ]);
+  });
+
+  const send = async (body: unknown, role?: 'HR_ADMIN' | 'EMPLOYEE') =>
+    fetch(`${baseUrl}/employees/summary`, {
+      method: 'QUERY',
+      headers: {
+        'content-type': 'application/json',
+        ...(role
+          ? {
+              authorization: `Bearer ${await jwt.signAsync(
+                { sub: '0b5e6a8e-2f43-4d3e-9a57-6f0f6f1b7c11', role },
+                { algorithm: 'HS256', expiresIn: 900 },
+              )}`,
+            }
+          : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+  it('refuses a request with no access token', async () => {
+    const response = await send({});
+
+    expect(response.status).toBe(401);
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('refuses a user who is not an HR admin, and reads nothing', async () => {
+    const response = await send({}, 'EMPLOYEE');
+
+    expect(response.status).toBe(403);
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('refuses an invalid body, including an empty list, without touching the database', async () => {
+    for (const body of [{ statuses: ['FIRED'] }, { tenureBands: [] }]) {
+      const response = await send(body, 'HR_ADMIN');
+
+      expect(response.status).toBe(400);
+    }
+    expect(testApp.queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('answers an HR admin with the headcount and the money figures in one query, ignoring any paging or sort sent along', async () => {
+    const response = await send({ page: 3, sortBy: 'level' }, 'HR_ADMIN');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      headcount: 10000,
+      counted: 9426,
+      totalAnnualUsd: '693900000.00',
+      medianUsd: '67507.00',
+      averageUsd: '73614.25',
+    });
+    expect(testApp.queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('never lets the money of fewer than 5 people out, even if the database sent it', async () => {
+    testApp.queryRaw.mockResolvedValue([
+      {
+        headcount: 3,
+        counted: 3,
+        totalAnnualUsd: '150000.00',
+        medianUsd: '50000.00',
+        averageUsd: '50000.00',
+      },
+    ]);
+
+    const response = await send({}, 'HR_ADMIN');
+
+    expect(await response.json()).toEqual({
+      headcount: 3,
+      counted: 3,
+      totalAnnualUsd: null,
+      medianUsd: null,
+      averageUsd: null,
+    });
+  });
+});

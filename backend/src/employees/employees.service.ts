@@ -12,10 +12,13 @@ import type {
   EmployeeListResponse,
   EmployeeProfile,
   EmployeeQuery,
+  EmployeeSummary,
+  EmployeeSummaryQuery,
   FilterOptionsResponse,
   SalaryChangeRequest,
   SalaryHistoryEntry,
 } from './employees.schemas.js';
+import { showableSummary } from './employee-summary.rules.js';
 import { toEmployeesCsv } from './employees-csv.js';
 import { checkSalaryChange } from './salary-change.rules.js';
 
@@ -38,6 +41,11 @@ export class EmployeesService {
   /** Everyone who matches the filters, as a CSV file: the directory as the user is looking at it. */
   async exportCsv(query: EmployeeExportQuery): Promise<string> {
     return toEmployeesCsv(await this.employees.listAll(query, new Date()));
+  }
+
+  /** The cards above the table: how many people match, and what the current ones are paid. */
+  async summary(query: EmployeeSummaryQuery): Promise<EmployeeSummary> {
+    return showableSummary(await this.employees.summary(query, new Date()));
   }
 
   /** One employee as the directory shows them, plus the whole salary history. */

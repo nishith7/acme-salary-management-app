@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { calendarDate } from '../common/calendar-date.js';
+import { ENOUGH, percentile } from '../common/pay-sql.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { SalaryChangeReason } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { EmployeeExportQuery } from './employees.schemas.js';
-import type { EmployeeQuery } from './employees.schemas.js';
+import type {
+  EmployeeExportQuery,
+  EmployeeQuery,
+  EmployeeSummary,
+} from './employees.schemas.js';
 
 /** One directory row as the database returns it: text for dates and money, so nothing is rounded or shifted by a time zone. */
 export interface EmployeeRow {
@@ -221,6 +225,37 @@ export interface SalaryHistoryRow {
 @Injectable()
 export class EmployeesRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The summary cards: how many people match the filters, and the total, median and average
+   * annual pay of the CURRENT ones among them, in US dollars (each salary converted at the
+   * rate in force today, the same definition as the directory and the insights, so the cards
+   * agree with both). People who have left, and people with no salary or exchange rate, are
+   * counted in `headcount` but not in the money. The money is left null for fewer than 5
+   * people (see `showableSummary`, the second lock). One query, whatever the filters.
+   */
+  async summary(
+    filters: DirectoryFilters,
+    today: Date,
+  ): Promise<EmployeeSummary> {
+    const parts = directoryParts(today);
+    const where = whereFor(filters, parts);
+    const rows = await this.prisma.$queryRaw<EmployeeSummary[]>`
+      WITH people AS (
+        SELECT CASE WHEN e.status::text = 'ACTIVE'
+            THEN round(s.annual_amount / fx.units_per_usd, 2) END AS usd
+        ${parts.people}
+        ${parts.salary}
+        ${where})
+      SELECT count(*)::int AS headcount,
+        count(usd)::int AS counted,
+        CASE WHEN ${ENOUGH} THEN sum(usd)::text END AS "totalAnnualUsd",
+        ${percentile(0.5)} AS "medianUsd",
+        CASE WHEN ${ENOUGH} THEN round(avg(usd), 2)::text END AS "averageUsd"
+      FROM people`;
+    // An aggregate without GROUP BY always returns exactly one row.
+    return rows[0] as EmployeeSummary;
+  }
 
   /**
    * The lists the directory's filters choose from: every country and department by name, and the
