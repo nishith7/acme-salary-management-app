@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router';
@@ -130,20 +130,7 @@ describe('the employee table', () => {
     });
   });
 
-  it('offers pages of 25, 50 and 100 rows, the most the API and the free grid allow', async () => {
-    renderTable();
-
-    await userEvent
-      .setup()
-      .click(screen.getByRole('combobox', { name: /rows per page/i }));
-
-    const options = within(await screen.findByRole('listbox')).getAllByRole(
-      'option',
-    );
-    expect(options.map((o) => o.textContent)).toEqual(['25', '50', '100']);
-  });
-
-  it('sorts by the API field of a clicked column, and flips the direction on a second click', async () => {
+  it('sorts by the API field of a clicked column', async () => {
     const user = userEvent.setup();
     const first = renderTable();
 

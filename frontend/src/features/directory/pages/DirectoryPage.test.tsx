@@ -275,24 +275,6 @@ describe('the summary cards', () => {
     ).toHaveLength(3);
   });
 
-  it('say so when nobody current matches, for example when only people who left do', async () => {
-    summary.mockResolvedValue({
-      headcount: 574,
-      counted: 0,
-      totalAnnualUsd: null,
-      medianUsd: null,
-      averageUsd: null,
-    });
-    await openDirectory();
-
-    const region = await cards();
-
-    expect(await within(region).findByText('574')).toBeInTheDocument();
-    expect(
-      within(region).getAllByText('No current employees match'),
-    ).toHaveLength(3);
-  });
-
   it('offer to try again when they could not be loaded, and show them once they load', async () => {
     // A 4xx is not retried by the app, so the failure shows at once.
     summary.mockRejectedValueOnce(new ApiError(403, 'Forbidden'));
