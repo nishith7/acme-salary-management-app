@@ -239,6 +239,16 @@ export const filterOptionsResponseSchema = z.object({
   departments: z
     .array(z.string())
     .describe('Every department, by name. Send it as a `departments` filter.'),
+  levels: z
+    .array(z.int())
+    .describe(
+      'The levels that exist, ascending. Send one as a `levels` filter.',
+    ),
+  jobTitles: z
+    .array(z.string())
+    .describe(
+      'The job titles that exist, in order. Send one as a `jobTitles` filter, exactly as written.',
+    ),
 });
 export type FilterOptionsResponse = z.infer<typeof filterOptionsResponseSchema>;
 

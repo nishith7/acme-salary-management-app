@@ -111,6 +111,14 @@ describe('GET /employees/filter-options (e2e)', () => {
     testApp.findDepartments
       .mockReset()
       .mockResolvedValue([{ name: 'Engineering' }, { name: 'Finance' }]);
+    // The levels that exist, then the job titles that exist (the order the code asks in).
+    testApp.groupEmployees
+      .mockReset()
+      .mockResolvedValueOnce([{ level: 1 }, { level: 3 }])
+      .mockResolvedValueOnce([
+        { jobTitle: 'Analyst' },
+        { jobTitle: 'Engineer' },
+      ]);
   });
 
   const get = async (role?: 'HR_ADMIN' | 'EMPLOYEE') =>
@@ -140,13 +148,15 @@ describe('GET /employees/filter-options (e2e)', () => {
     expect(testApp.findDepartments).not.toHaveBeenCalled();
   });
 
-  it('gives an HR admin the countries (code and name) and the department names', async () => {
+  it('gives an HR admin the countries (code and name), the department names, the levels and the job titles that exist', async () => {
     const response = await get('HR_ADMIN');
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       countries: [{ code: 'IN', name: 'India' }],
       departments: ['Engineering', 'Finance'],
+      levels: [1, 3],
+      jobTitles: ['Analyst', 'Engineer'],
     });
   });
 });

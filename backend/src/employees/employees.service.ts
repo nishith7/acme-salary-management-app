@@ -23,12 +23,15 @@ import { checkSalaryChange } from './salary-change.rules.js';
 export class EmployeesService {
   constructor(private readonly employees: EmployeesRepository) {}
 
-  /** What the directory's country and department filters can be set to. */
+  /** What the directory's filters can be set to: countries, departments, levels and job titles. */
   async filterOptions(): Promise<FilterOptionsResponse> {
-    const { countries, departments } = await this.employees.filterOptions();
+    const { countries, departments, levels, jobTitles } =
+      await this.employees.filterOptions();
     return {
       countries,
       departments: departments.map((department) => department.name),
+      levels,
+      jobTitles,
     };
   }
 

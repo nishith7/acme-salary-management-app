@@ -222,12 +222,18 @@ export interface SalaryHistoryRow {
 export class EmployeesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The reference lists the directory's filters choose from, each by name. */
+  /**
+   * The lists the directory's filters choose from: every country and department by name, and the
+   * levels and job titles that exist, each once and in order (grouped by the database, so 10,000
+   * employees are not read to find a few dozen values).
+   */
   async filterOptions(): Promise<{
     countries: { code: string; name: string }[];
     departments: { name: string }[];
+    levels: number[];
+    jobTitles: string[];
   }> {
-    const [countries, departments] = await Promise.all([
+    const [countries, departments, levels, jobTitles] = await Promise.all([
       this.prisma.country.findMany({
         select: { code: true, name: true },
         orderBy: { name: 'asc' },
@@ -236,8 +242,21 @@ export class EmployeesRepository {
         select: { name: true },
         orderBy: { name: 'asc' },
       }),
+      this.prisma.employee.groupBy({
+        by: ['level'],
+        orderBy: { level: 'asc' },
+      }),
+      this.prisma.employee.groupBy({
+        by: ['jobTitle'],
+        orderBy: { jobTitle: 'asc' },
+      }),
     ]);
-    return { countries, departments };
+    return {
+      countries,
+      departments,
+      levels: levels.map((row) => row.level),
+      jobTitles: jobTitles.map((row) => row.jobTitle),
+    };
   }
 
   /** What the rules for a salary change need to know about an employee, or null if there is none. */

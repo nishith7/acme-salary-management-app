@@ -29,6 +29,8 @@ export interface TestApp {
   findDepartments: ReturnType<typeof vi.fn>;
   /** Stand-in for prisma.employee.findUnique. */
   findEmployee: ReturnType<typeof vi.fn>;
+  /** Stand-in for prisma.employee.groupBy (the levels and job titles that exist). */
+  groupEmployees: ReturnType<typeof vi.fn>;
   /** Stand-in for prisma.salaryRecord.findFirst. */
   findSalaryRecord: ReturnType<typeof vi.fn>;
   /** Stand-in for prisma.salaryRecord.create. */
@@ -59,6 +61,7 @@ export async function createTestApp(
   const findCountries = vi.fn();
   const findDepartments = vi.fn();
   const findEmployee = vi.fn();
+  const groupEmployees = vi.fn();
   const findSalaryRecord = vi.fn();
   const createSalaryRecord = vi.fn();
   const createManySalaryRecords = vi.fn();
@@ -69,7 +72,7 @@ export async function createTestApp(
     user: { findUnique: findUser },
     country: { findMany: findCountries },
     department: { findMany: findDepartments },
-    employee: { findUnique: findEmployee },
+    employee: { findUnique: findEmployee, groupBy: groupEmployees },
     salaryRecord: {
       findFirst: findSalaryRecord,
       create: createSalaryRecord,
@@ -107,6 +110,7 @@ export async function createTestApp(
     findCountries,
     findDepartments,
     findEmployee,
+    groupEmployees,
     findSalaryRecord,
     createSalaryRecord,
     createManySalaryRecords,

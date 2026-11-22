@@ -314,4 +314,45 @@ describe('EmployeesRepository.list (integration)', () => {
         salaryEffectiveFrom: null,
       });
     }));
+
+  it('lists the levels and job titles that exist, each once and in order', () =>
+    inRollback(prisma, async (tx) => {
+      const country = await tx.country.create({
+        data: { code: 'XF', name: 'Test Country F', currencyCode: 'XTS' },
+      });
+      const department = await tx.department.create({
+        data: { name: 'Test Department Options' },
+      });
+      // Two people share the made-up title; levels 97 and 98 do not exist in the real data.
+      for (const [code, level, title] of [
+        ['O001', 98, 'Test Title Zeta'],
+        ['O002', 97, 'Test Title Zeta'],
+        ['O003', 97, 'Test Title Alpha'],
+      ] as const) {
+        await tx.employee.create({
+          data: {
+            employeeCode: `EMPTEST-${code}`,
+            fullName: `Person ${code}`,
+            gender: 'OTHER',
+            jobTitle: title,
+            level,
+            countryId: country.id,
+            departmentId: department.id,
+            joiningDate: new Date('2020-01-01T00:00:00.000Z'),
+          },
+        });
+      }
+      const repository = new EmployeesRepository(asPrismaService(tx));
+
+      const { levels, jobTitles } = await repository.filterOptions();
+
+      expect(levels).toEqual([...levels].sort((a, b) => a - b));
+      expect(new Set(levels).size).toBe(levels.length);
+      expect(levels.filter((l) => l >= 97)).toEqual([97, 98]);
+      expect(jobTitles).toEqual([...jobTitles].sort());
+      expect(jobTitles.filter((t) => t.startsWith('Test Title'))).toEqual([
+        'Test Title Alpha',
+        'Test Title Zeta',
+      ]);
+    }));
 });
