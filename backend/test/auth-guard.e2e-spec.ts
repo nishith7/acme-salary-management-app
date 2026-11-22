@@ -133,42 +133,7 @@ describe('Global authentication (e2e)', () => {
       expectNoDatabaseAccess();
     });
 
-    it('returns 401 for an expired token', async () => {
-      const expired = await jwt.signAsync(
-        {
-          sub: userId,
-          role: 'HR_ADMIN',
-          exp: Math.floor(Date.now() / 1000) - 10,
-        },
-        { algorithm: 'HS256' },
-      );
-
-      await get('/probe/any', expired).expect(401);
-    });
-
-    it('returns 401 for a token signed with a different secret', async () => {
-      const forged = await new JwtService({
-        secret: 'not-the-servers-secret-but-long-enough-to-be-valid',
-      }).signAsync(
-        { sub: userId, role: 'HR_ADMIN' },
-        { algorithm: 'HS256', expiresIn: 900 },
-      );
-
-      await get('/probe/any', forged).expect(401);
-    });
-
-    it('returns 401 for an unsigned token that claims alg none', async () => {
-      const part = (value: object) =>
-        Buffer.from(JSON.stringify(value)).toString('base64url');
-      const unsigned = `${part({ alg: 'none', typ: 'JWT' })}.${part({
-        sub: userId,
-        role: 'HR_ADMIN',
-        exp: Math.floor(Date.now() / 1000) + 900,
-      })}.`;
-
-      await get('/probe/any', unsigned).expect(401);
-    });
-
+    // Expired, forged and unsigned tokens are covered where the guard is unit tested.
     it('does not take the refresh cookie for an access token', async () => {
       await request(testApp.app.getHttpServer())
         .get('/probe/any')

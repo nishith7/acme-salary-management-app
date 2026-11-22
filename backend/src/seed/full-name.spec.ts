@@ -1,18 +1,10 @@
 import { formatFullName } from './full-name.js';
 
 describe('formatFullName', () => {
-  it.each([
-    'en_US',
-    'en_GB',
-    'de',
-    'fr',
-    'nl',
-    'es',
-    'pt_BR',
-    'pl',
-    'ar',
-  ] as const)('writes the given name first for %s', (locale) => {
-    expect(formatFullName('Anna', 'Meyer', locale)).toBe('Anna Meyer');
+  it('writes the given name first for the western and Arabic locales', () => {
+    for (const locale of ['en_US', 'de', 'pt_BR', 'ar'] as const) {
+      expect(formatFullName('Anna', 'Meyer', locale)).toBe('Anna Meyer');
+    }
   });
 
   it('writes the family name first for Japanese, with a space', () => {

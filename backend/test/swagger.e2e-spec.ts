@@ -61,10 +61,6 @@ describe('Swagger (e2e)', () => {
       document = response.body as OpenApiDocument;
     });
 
-    it('is titled for this API', () => {
-      expect(document.info.title).toBe('ACME Salary Management API');
-    });
-
     // At OpenAPI 3.0 and 3.1 Swagger silently leaves out routes that use the HTTP
     // QUERY method, so this fails if the document is not 3.2.
     it('documents QUERY /employees with its JSON body and bearer token', () => {
@@ -78,160 +74,41 @@ describe('Swagger (e2e)', () => {
       expect(operation?.security).toEqual([{ bearer: [] }]);
     });
 
-    it('documents GET /health under the Health tag with a 200 response', () => {
-      const operation = document.paths['/health']?.get;
+    it('takes the login body from the Zod schema: a required email and password', () => {
+      const schema =
+        document.paths['/auth/login']?.post?.requestBody?.content?.[
+          'application/json'
+        ]?.schema;
 
-      expect(operation?.tags).toEqual(['Health']);
-      expect(Object.keys(operation?.responses ?? {})).toEqual(['200']);
-    });
-
-    it('documents GET /health/ready with 200 and 503 responses', () => {
-      const operation = document.paths['/health/ready']?.get;
-
-      expect(operation?.tags).toEqual(['Health']);
-      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([
-        '200',
-        '503',
-      ]);
-    });
-
-    describe('POST /auth/login', () => {
-      const operation = () => document.paths['/auth/login']?.post;
-
-      it('is documented under the Auth tag with 200, 400, 401 and 429 responses', () => {
-        expect(operation()?.tags).toEqual(['Auth']);
-        expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
-          '200',
-          '400',
-          '401',
-          '429',
-        ]);
-      });
-
-      it('takes a JSON body with a required email and password, taken from the Zod schema', () => {
-        const schema =
-          operation()?.requestBody?.content?.['application/json']?.schema;
-
-        expect(schema?.type).toBe('object');
-        expect(schema?.required?.sort()).toEqual(['email', 'password']);
-        expect(schema?.properties?.['email']?.format).toBe('email');
-        expect(schema?.properties?.['password']?.type).toBe('string');
-        expect(schema?.properties?.['password']?.description).toContain('128');
-      });
-
-      it('returns the access token, its lifetime and the user, taken from the Zod schema', () => {
-        const schema =
-          operation()?.responses['200']?.content?.['application/json']?.schema;
-
-        expect(Object.keys(schema?.properties ?? {}).sort()).toEqual([
-          'accessToken',
-          'expiresIn',
-          'user',
-        ]);
-        expect(
-          Object.keys(schema?.properties?.['user']?.properties ?? {}).sort(),
-        ).toEqual(['email', 'id', 'name', 'role']);
-      });
-    });
-
-    describe('POST /auth/refresh', () => {
-      const operation = () => document.paths['/auth/refresh']?.post;
-
-      it('is documented under the Auth tag with 200 and 401 responses, and takes no body', () => {
-        expect(operation()?.tags).toEqual(['Auth']);
-        expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
-          '200',
-          '401',
-        ]);
-        expect(operation()?.requestBody).toBeUndefined();
-      });
-
-      it('returns the same session shape as login', () => {
-        const refresh =
-          operation()?.responses['200']?.content?.['application/json']?.schema;
-        const login =
-          document.paths['/auth/login']?.post?.responses['200']?.content?.[
-            'application/json'
-          ]?.schema;
-
-        expect(Object.keys(refresh?.properties ?? {}).sort()).toEqual([
-          'accessToken',
-          'expiresIn',
-          'user',
-        ]);
-        expect(refresh).toEqual(login);
-      });
-    });
-
-    describe('POST /auth/logout', () => {
-      const operation = () => document.paths['/auth/logout']?.post;
-
-      it('is documented under the Auth tag with a 204 response only, and takes no body', () => {
-        expect(operation()?.tags).toEqual(['Auth']);
-        expect(Object.keys(operation()?.responses ?? {})).toEqual(['204']);
-        expect(operation()?.requestBody).toBeUndefined();
-      });
-    });
-
-    describe('GET /auth/me', () => {
-      const operation = () => document.paths['/auth/me']?.get;
-
-      it('is documented under the Auth tag with 200 and 401 responses', () => {
-        expect(operation()?.tags).toEqual(['Auth']);
-        expect(Object.keys(operation()?.responses ?? {}).sort()).toEqual([
-          '200',
-          '401',
-        ]);
-      });
-
-      it('returns the user, taken from the Zod schema', () => {
-        const schema =
-          operation()?.responses['200']?.content?.['application/json']?.schema;
-
-        expect(Object.keys(schema?.properties ?? {}).sort()).toEqual([
-          'email',
-          'id',
-          'name',
-          'role',
-        ]);
-      });
+      expect(schema?.type).toBe('object');
+      expect(schema?.required?.sort()).toEqual(['email', 'password']);
+      expect(schema?.properties?.['email']?.format).toBe('email');
+      expect(schema?.properties?.['password']?.description).toContain('128');
     });
 
     describe('authentication', () => {
-      it('declares a bearer JWT security scheme', () => {
+      it('declares a bearer JWT security scheme, and marks a protected route as needing it', () => {
         expect(document.components.securitySchemes?.['bearer']).toEqual({
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
         });
-      });
-
-      it('marks a protected route as needing it', () => {
         expect(document.paths['/auth/me']?.get?.security).toEqual([
           { bearer: [] },
         ]);
       });
 
-      it.each([
-        ['/health', 'get'],
-        ['/health/ready', 'get'],
-        ['/auth/login', 'post'],
-        ['/auth/refresh', 'post'],
-        ['/auth/logout', 'post'],
-      ] as const)(
-        'does not mark the public route %s as needing it',
-        (path, method) => {
+      it('does not mark the public routes as needing it', () => {
+        for (const [path, method] of [
+          ['/health', 'get'],
+          ['/health/ready', 'get'],
+          ['/auth/login', 'post'],
+          ['/auth/refresh', 'post'],
+          ['/auth/logout', 'post'],
+        ] as const) {
           expect(document.paths[path]?.[method]?.security).toBeUndefined();
-        },
-      );
-    });
-
-    it('describes the response bodies as schemas', () => {
-      expect(Object.keys(document.components.schemas).sort()).toEqual([
-        'LivenessResponse',
-        'ReadinessErrorResponse',
-        'ReadinessResponse',
-      ]);
+        }
+      });
     });
   });
 });

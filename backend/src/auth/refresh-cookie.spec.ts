@@ -80,14 +80,12 @@ describe('refresh cookie', () => {
     });
 
     // cookie-parser turns a value starting with "j:" into an object.
-    it.each([
-      ['an object', { a: 1 }],
-      ['an array', ['abc']],
-      ['a number', 42],
-    ])('ignores a cookie value that is %s, not a string', (_label, value) => {
-      expect(
-        readRefreshCookie(requestWith({ refresh_token: value })),
-      ).toBeUndefined();
+    it('ignores a cookie value that is not a string: an object, an array or a number', () => {
+      for (const value of [{ a: 1 }, ['abc'], 42]) {
+        expect(
+          readRefreshCookie(requestWith({ refresh_token: value })),
+        ).toBeUndefined();
+      }
     });
   });
 

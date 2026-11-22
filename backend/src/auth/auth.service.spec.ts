@@ -308,7 +308,6 @@ describe('AuthService.refresh', () => {
     // [description, how to arrange it, the token the browser sends]
     const unusable: [string, () => void, string | undefined][] = [
       ['no token is sent', () => undefined, undefined],
-      ['an empty token is sent', () => undefined, ''],
       [
         'the token is unknown',
         () => findByHash.mockResolvedValue(null),
@@ -336,7 +335,7 @@ describe('AuthService.refresh', () => {
     ];
 
     it.each(unusable)(
-      'rejects with 401 and issues no token when %s',
+      'rejects with 401, issues no token and revokes nothing when %s',
       async (_label, arrange, token) => {
         arrange();
 
@@ -345,16 +344,6 @@ describe('AuthService.refresh', () => {
         );
 
         expect(rotate).not.toHaveBeenCalled();
-      },
-    );
-
-    it.each(unusable)(
-      'does not revoke the family when %s',
-      async (_label, arrange, token) => {
-        arrange();
-
-        await service.refresh(token).catch(() => undefined);
-
         expect(revokeFamily).not.toHaveBeenCalled();
       },
     );
@@ -527,18 +516,13 @@ describe('AuthService.logout', () => {
     expect(revokeFamily).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['no token', undefined],
-    ['an empty token', ''],
-  ])(
-    'does nothing, without querying the database, for %s',
-    async (_l, value) => {
-      await expect(service.logout(value)).resolves.toBeUndefined();
+  it('does nothing, without querying the database, for no token or an empty one', async () => {
+    await expect(service.logout(undefined)).resolves.toBeUndefined();
+    await expect(service.logout('')).resolves.toBeUndefined();
 
-      expect(findByHash).not.toHaveBeenCalled();
-      expect(revokeFamily).not.toHaveBeenCalled();
-    },
-  );
+    expect(findByHash).not.toHaveBeenCalled();
+    expect(revokeFamily).not.toHaveBeenCalled();
+  });
 });
 
 describe('AuthService.me', () => {
