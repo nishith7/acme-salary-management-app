@@ -10,8 +10,12 @@ import {
 } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator.js';
 import {
+  type GenderGapQuery,
+  type GenderGapResponse,
   type PayInsightsResponse,
   type PayQuery,
+  genderGapQuerySchema,
+  genderGapResponseSchema,
   payInsightsResponseSchema,
   payQuerySchema,
 } from './insights.schemas.js';
@@ -46,5 +50,22 @@ export class InsightsController {
     @Body({ schema: payQuerySchema }) query: PayQuery,
   ): Promise<PayInsightsResponse> {
     return this.insights.pay(query);
+  }
+
+  @QueryMethod('gender-gap')
+  @ApiOperation({
+    summary: 'The gender pay gap, level by level',
+    description:
+      "The median pay of women and of men at each level and overall, in US dollars a year, for current employees, and the gap between them: the women's median against the men's as a percentage of the men's (negative when women are paid less). The filters narrow the people, which is how to compare like with like (for example one country). A level is only compared when women and men each number at least 5, so no median can single someone out; the number of levels left out is `hiddenLevels`. People of another gender, and people with no salary or exchange rate, are not in the comparison and are counted as `otherGender` and `excluded`.",
+  })
+  @ApiOkResponse({
+    standardSchema: genderGapResponseSchema,
+    description: 'The medians and the gap, level by level.',
+  })
+  @ApiBadRequestResponse({ description: 'The body is invalid.' })
+  genderGap(
+    @Body({ schema: genderGapQuerySchema }) query: GenderGapQuery,
+  ): Promise<GenderGapResponse> {
+    return this.insights.genderGap(query);
   }
 }

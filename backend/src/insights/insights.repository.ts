@@ -8,6 +8,8 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   MIN_GROUP_SIZE,
+  type GenderOverallRow,
+  type GenderRow,
   type PayGroupRow,
   type PayStatsRow,
 } from './insights.rules.js';
@@ -35,6 +37,17 @@ const GROUPING: Record<PayGrouping, { key: Prisma.Sql; label: Prisma.Sql }> = {
   },
 };
 
+/** True for a set of people big enough that their figures may be calculated at all. */
+const ENOUGH = Prisma.sql`count(usd) >= ${MIN_GROUP_SIZE}::int`;
+
+/**
+ * A percentile of `usd`, rounded to cents as text, or null when the group is too small.
+ * `percentile_cont` interpolates between the two middle values (the usual median) and works
+ * in double precision; for annual salaries in dollars the error is far below a cent.
+ */
+const percentile = (fraction: number) =>
+  Prisma.sql`CASE WHEN ${ENOUGH} THEN round((percentile_cont(${fraction}::float8) WITHIN GROUP (ORDER BY usd))::numeric, 2)::text END`;
+
 /**
  * Pay figures, worked out in the database. They are about current employees only, in US
  * dollars (each salary converted at the rate in force today, the same definition of "salary
@@ -43,10 +56,6 @@ const GROUPING: Record<PayGrouping, { key: Prisma.Sql; label: Prisma.Sql }> = {
  * The privacy rule is applied here as well as in the service: the figures of a group of
  * fewer than MIN_GROUP_SIZE people are never calculated into the result, they come back as
  * null, so a small group's pay does not even reach the application.
- *
- * Percentiles use `percentile_cont`, which interpolates between the two middle values (the
- * usual median) and works in double precision. The result is rounded back to cents; for
- * annual salaries in dollars the error is many orders of magnitude below a cent.
  */
 @Injectable()
 export class InsightsRepository {
@@ -70,15 +79,12 @@ export class InsightsRepository {
       ${parts.salary}
       ${where}`;
 
-    const enough = Prisma.sql`count(usd) >= ${MIN_GROUP_SIZE}::int`;
-    const percentile = (fraction: number) =>
-      Prisma.sql`CASE WHEN ${enough} THEN round((percentile_cont(${fraction}::float8) WITHIN GROUP (ORDER BY usd))::numeric, 2)::text END`;
     const figures = Prisma.sql`
       count(usd)::int AS headcount,
       ${percentile(0.25)} AS p25,
       ${percentile(0.5)} AS median,
       ${percentile(0.75)} AS p75,
-      CASE WHEN ${enough} THEN sum(usd)::text END AS total`;
+      CASE WHEN ${ENOUGH} THEN sum(usd)::text END AS total`;
 
     const [groups, overall] = await Promise.all([
       this.prisma.$queryRaw<PayGroupRow[]>`
@@ -94,5 +100,59 @@ export class InsightsRepository {
     ]);
     // An aggregate without GROUP BY always returns exactly one row.
     return { groups, overall: overall[0] as PayOverallRow };
+  }
+
+  /**
+   * The median pay of women and of men, level by level and for everyone together, with how
+   * many people each median is about. A side with fewer than MIN_GROUP_SIZE people comes
+   * back with no median. People of another gender, and people with no salary or exchange rate,
+   * are in neither side: they are only counted, so the totals say what they cover.
+   */
+  async genderPayBy(
+    filters: PayFilters,
+    today: Date,
+  ): Promise<{
+    levels: GenderRow[];
+    overall: GenderOverallRow[];
+    otherGender: number;
+    excluded: number;
+  }> {
+    const parts = directoryParts(today);
+    const where = whereFor({ ...filters, statuses: ['ACTIVE'] }, parts);
+    const people = Prisma.sql`
+      SELECT e.level AS level, e.gender::text AS gender,
+        round(s.annual_amount / fx.units_per_usd, 2) AS usd
+      ${parts.people}
+      ${parts.salary}
+      ${where}`;
+    const compared = Prisma.sql`usd IS NOT NULL AND gender IN ('FEMALE', 'MALE')`;
+    const figures = Prisma.sql`count(usd)::int AS headcount, ${percentile(0.5)} AS median`;
+
+    const [levels, overall, counts] = await Promise.all([
+      this.prisma.$queryRaw<GenderRow[]>`
+        WITH people AS (${people})
+        SELECT level, gender, ${figures}
+        FROM people
+        WHERE ${compared}
+        GROUP BY level, gender`,
+      this.prisma.$queryRaw<GenderOverallRow[]>`
+        WITH people AS (${people})
+        SELECT gender, ${figures}
+        FROM people
+        WHERE ${compared}
+        GROUP BY gender`,
+      this.prisma.$queryRaw<{ otherGender: number; excluded: number }[]>`
+        WITH people AS (${people})
+        SELECT
+          count(*) FILTER (WHERE usd IS NOT NULL AND gender NOT IN ('FEMALE', 'MALE'))::int AS "otherGender",
+          count(*) FILTER (WHERE usd IS NULL)::int AS excluded
+        FROM people`,
+    ]);
+    return {
+      levels,
+      overall,
+      otherGender: counts[0]?.otherGender ?? 0,
+      excluded: counts[0]?.excluded ?? 0,
+    };
   }
 }

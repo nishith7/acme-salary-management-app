@@ -4,7 +4,7 @@ import type {
 } from '../generated/prisma/enums.js';
 import { checkSalaryChange } from '../employees/salary-change.rules.js';
 import type { CsvRecord } from './csv-parse.js';
-import { percentChange, toCents } from './money.js';
+import { percentChange, toCents } from '../common/money.js';
 
 /**
  * The rules for a bulk salary update from a spreadsheet, with no I/O so every one of them is

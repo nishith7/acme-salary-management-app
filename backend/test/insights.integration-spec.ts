@@ -251,3 +251,158 @@ describe('InsightsRepository.payBy (integration)', () => {
       expect(byKey.get('XB')).toMatchObject({ headcount: 4, median: null });
     }));
 });
+
+/**
+ * The pay of women and of men by level, against the real database. Country XG (currency XTS,
+ * 2 per US dollar), department "Test Department Gen". Level 2: five women paid 50,000 to
+ * 90,000 US dollars and five men paid 70,000 to 110,000. Level 3: six women and only four men
+ * (too few to compare). Plus one person of another gender, and one woman with no salary.
+ */
+describe('InsightsRepository.genderPayBy (integration)', () => {
+  let prisma: PrismaClient;
+
+  beforeAll(() => {
+    prisma = createTestPrisma();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  const today = new Date('2026-11-20T00:00:00.000Z');
+  const date = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+
+  async function seedGender(tx: Tx) {
+    const country = await tx.country.create({
+      data: { code: 'XG', name: 'Test Country G', currencyCode: 'XTS' },
+    });
+    const department = await tx.department.create({
+      data: { name: 'Test Department Gen' },
+    });
+    await tx.fxRate.create({
+      data: {
+        currencyCode: 'XTS',
+        validFrom: date('2010-01-01'),
+        unitsPerUsd: '2',
+      },
+    });
+    let n = 0;
+    const person = async (
+      gender: 'FEMALE' | 'MALE' | 'OTHER',
+      level: number,
+      usd: number | null,
+    ) => {
+      n += 1;
+      const employee = await tx.employee.create({
+        data: {
+          employeeCode: `EMPTEST-G${String(n).padStart(3, '0')}`,
+          fullName: `Person ${n}`,
+          gender,
+          jobTitle: 'Tester',
+          level,
+          countryId: country.id,
+          departmentId: department.id,
+          joiningDate: date('2020-01-01'),
+        },
+      });
+      if (usd !== null) {
+        await tx.salaryRecord.create({
+          data: {
+            employeeId: employee.id,
+            annualAmount: `${usd * 2000}`,
+            currencyCode: 'XTS',
+            effectiveFrom: date('2020-01-01'),
+          },
+        });
+      }
+    };
+    for (const usd of [50, 60, 70, 80, 90]) await person('FEMALE', 2, usd);
+    for (const usd of [70, 80, 90, 100, 110]) await person('MALE', 2, usd);
+    for (let i = 0; i < 6; i++) await person('FEMALE', 3, 100);
+    for (let i = 0; i < 4; i++) await person('MALE', 3, 120);
+    await person('OTHER', 2, 75);
+    await person('FEMALE', 2, null);
+  }
+
+  it('gives the number of women and of men and the median of each, by level, and for everyone together, with no figures for a side under 5', () =>
+    inRollback(prisma, async (tx) => {
+      await seedGender(tx);
+      const repository = new InsightsRepository(asPrismaService(tx));
+
+      const result = await repository.genderPayBy({ countries: ['XG'] }, today);
+
+      const at = (level: number, gender: string) =>
+        result.levels.find((r) => r.level === level && r.gender === gender);
+      expect(at(2, 'FEMALE')).toEqual({
+        level: 2,
+        gender: 'FEMALE',
+        headcount: 5,
+        median: '70000.00',
+      });
+      expect(at(2, 'MALE')).toMatchObject({ headcount: 5, median: '90000.00' });
+      expect(at(3, 'FEMALE')).toMatchObject({
+        headcount: 6,
+        median: '100000.00',
+      });
+      // Four men: counted, but no figure.
+      expect(at(3, 'MALE')).toEqual({
+        level: 3,
+        gender: 'MALE',
+        headcount: 4,
+        median: null,
+      });
+      // Everyone together: 11 women (50 to 90, then six at 100) and 9 men (70 to 110, then four at 120).
+      const overall = (gender: string) =>
+        result.overall.find((r) => r.gender === gender);
+      expect(overall('FEMALE')).toEqual({
+        gender: 'FEMALE',
+        headcount: 11,
+        median: '100000.00',
+      });
+      expect(overall('MALE')).toEqual({
+        gender: 'MALE',
+        headcount: 9,
+        median: '110000.00',
+      });
+    }));
+
+  it('counts, and does not compare, people of another gender, and people with no salary', () =>
+    inRollback(prisma, async (tx) => {
+      await seedGender(tx);
+      const repository = new InsightsRepository(asPrismaService(tx));
+
+      const result = await repository.genderPayBy({ countries: ['XG'] }, today);
+
+      expect(result.otherGender).toBe(1);
+      expect(result.excluded).toBe(1);
+      // They are in neither side: no row of theirs reaches the comparison, by level or overall.
+      expect([...new Set(result.levels.map((r) => r.gender))].sort()).toEqual([
+        'FEMALE',
+        'MALE',
+      ]);
+      expect(result.overall.map((r) => r.gender).sort()).toEqual([
+        'FEMALE',
+        'MALE',
+      ]);
+      // And they are in neither side's headcount.
+      expect(
+        result.levels
+          .filter((r) => r.level === 2 && r.gender === 'FEMALE')
+          .map((r) => r.headcount),
+      ).toEqual([5]);
+    }));
+
+  it('narrows to the filters, like every other insight', () =>
+    inRollback(prisma, async (tx) => {
+      await seedGender(tx);
+      const repository = new InsightsRepository(asPrismaService(tx));
+
+      const nobody = await repository.genderPayBy(
+        { countries: ['XG'], levels: [9] },
+        today,
+      );
+
+      expect(nobody.levels).toEqual([]);
+      expect(nobody.overall).toEqual([]);
+    }));
+});

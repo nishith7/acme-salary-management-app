@@ -1,7 +1,10 @@
 import {
   MIN_GROUP_SIZE,
+  pairGenderGaps,
+  pairOverallGap,
   showableGroups,
   showableOverall,
+  type GenderRow,
   type PayGroupRow,
   type PayStatsRow,
 } from './insights.rules.js';
@@ -114,5 +117,100 @@ describe('showableOverall', () => {
     expect(showableOverall(overall(5))).toMatchObject({ headcount: 5 });
     expect(showableOverall(overall(4))).toBeNull();
     expect(showableOverall(overall(0))).toBeNull();
+  });
+});
+
+// The gender pay gap compares the median pay of women and of men. It is only ever shown when
+// BOTH sides are at least 5 people: with 3 women in a level, "the women's median" is nearly
+// one person's salary.
+describe('pairGenderGaps', () => {
+  const row = (
+    level: number,
+    gender: 'FEMALE' | 'MALE',
+    headcount: number,
+    median: string | null,
+  ): GenderRow => ({ level, gender, headcount, median });
+
+  it('compares the women’s median with the men’s, as a percentage of the men’s, negative when women are paid less', () => {
+    const { levels } = pairGenderGaps([
+      row(2, 'FEMALE', 5, '70000.00'),
+      row(2, 'MALE', 5, '90000.00'),
+    ]);
+
+    expect(levels).toEqual([
+      {
+        level: 2,
+        label: 'Level 2',
+        women: { headcount: 5, medianUsd: '70000.00' },
+        men: { headcount: 5, medianUsd: '90000.00' },
+        // (70,000 - 90,000) / 90,000 = -22.2%
+        gapPercent: '-22.2',
+      },
+    ]);
+  });
+
+  it('gives a positive gap when the women’s median is higher, and 0.0 when they are equal', () => {
+    const { levels } = pairGenderGaps([
+      row(1, 'FEMALE', 6, '110000.00'),
+      row(1, 'MALE', 6, '100000.00'),
+      row(2, 'FEMALE', 6, '50000.00'),
+      row(2, 'MALE', 6, '50000.00'),
+    ]);
+
+    expect(levels.map((l) => l.gapPercent)).toEqual(['10.0', '0.0']);
+  });
+
+  it('hides a level unless BOTH sides have at least 5 people, and counts what it hid', () => {
+    const { levels, hiddenLevels } = pairGenderGaps([
+      row(1, 'FEMALE', 5, '1.00'),
+      row(1, 'MALE', 5, '1.00'),
+      row(2, 'FEMALE', 4, '1.00'), // 4 women: hidden
+      row(2, 'MALE', 50, '1.00'),
+      row(3, 'MALE', 9, '1.00'), // no women at all: hidden
+    ]);
+
+    expect(levels.map((l) => l.level)).toEqual([1]);
+    expect(hiddenLevels).toBe(2);
+  });
+
+  it('hides a level whose side arrived with no median, rather than show a blank', () => {
+    const { levels, hiddenLevels } = pairGenderGaps([
+      row(1, 'FEMALE', 8, null),
+      row(1, 'MALE', 8, '1.00'),
+    ]);
+
+    expect(levels).toEqual([]);
+    expect(hiddenLevels).toBe(1);
+  });
+
+  it('puts the levels in numeric order (2 before 10)', () => {
+    const rows = [10, 2, 1].flatMap((level) => [
+      row(level, 'FEMALE', 6, '10.00'),
+      row(level, 'MALE', 6, '10.00'),
+    ]);
+
+    expect(pairGenderGaps(rows).levels.map((l) => l.level)).toEqual([1, 2, 10]);
+  });
+});
+
+describe('pairOverallGap', () => {
+  it('gives the gap for everyone together when both sides have at least 5 people, and nothing otherwise', () => {
+    expect(
+      pairOverallGap([
+        { gender: 'FEMALE', headcount: 11, median: '100000.00' },
+        { gender: 'MALE', headcount: 9, median: '110000.00' },
+      ]),
+    ).toEqual({
+      women: { headcount: 11, medianUsd: '100000.00' },
+      men: { headcount: 9, medianUsd: '110000.00' },
+      gapPercent: '-9.1',
+    });
+    expect(
+      pairOverallGap([
+        { gender: 'FEMALE', headcount: 4, median: null },
+        { gender: 'MALE', headcount: 9, median: '110000.00' },
+      ]),
+    ).toBeNull();
+    expect(pairOverallGap([])).toBeNull();
   });
 });

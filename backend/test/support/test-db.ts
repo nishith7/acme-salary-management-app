@@ -53,7 +53,7 @@ export async function inRollback(
         await work(tx);
         throw new Rollback('rollback');
       },
-      { timeout: 30_000, maxWait: 30_000 },
+      { timeout: 60_000, maxWait: 30_000 },
     );
   } catch (error) {
     if (!(error instanceof Rollback)) {

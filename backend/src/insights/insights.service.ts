@@ -2,10 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { InsightsRepository } from './insights.repository.js';
 import {
   MIN_GROUP_SIZE,
+  pairGenderGaps,
+  pairOverallGap,
   showableGroups,
   showableOverall,
 } from './insights.rules.js';
-import type { PayInsightsResponse, PayQuery } from './insights.schemas.js';
+import type {
+  GenderGapQuery,
+  GenderGapResponse,
+  PayInsightsResponse,
+  PayQuery,
+} from './insights.schemas.js';
 
 @Injectable()
 export class InsightsService {
@@ -52,6 +59,34 @@ export class InsightsService {
       })),
       hiddenGroups: shown.hiddenGroups,
       excluded: overall.excluded,
+    };
+  }
+
+  /**
+   * The median pay of women against men, level by level and overall. A level is compared
+   * only when women and men each number at least 5 (the privacy rule, applied to each side).
+   */
+  async genderGap(query: GenderGapQuery): Promise<GenderGapResponse> {
+    const today = new Date();
+    const { levels, overall, otherGender, excluded } =
+      await this.insights.genderPayBy(
+        {
+          countries: query.countries,
+          departments: query.departments,
+          levels: query.levels,
+        },
+        today,
+      );
+    const paired = pairGenderGaps(levels);
+    return {
+      asOf: today.toISOString().slice(0, 10),
+      currency: 'USD',
+      minimumGroupSize: MIN_GROUP_SIZE,
+      overall: pairOverallGap(overall),
+      levels: paired.levels,
+      hiddenLevels: paired.hiddenLevels,
+      otherGender,
+      excluded,
     };
   }
 }

@@ -112,3 +112,75 @@ export const payInsightsResponseSchema = z.object({
     ),
 });
 export type PayInsightsResponse = z.infer<typeof payInsightsResponseSchema>;
+
+/** The gender gap is always by level, so it takes only the filters, not a grouping. */
+export const genderGapQuerySchema = z
+  .object({
+    countries: payQuerySchema.shape.countries,
+    departments: payQuerySchema.shape.departments,
+    levels: payQuerySchema.shape.levels,
+  })
+  .meta({ example: { countries: ['IN'], departments: ['Engineering'] } });
+export type GenderGapQuery = z.output<typeof genderGapQuerySchema>;
+
+const genderSideShape = z.object({
+  headcount: z.int().describe('How many people the median is about.'),
+  medianUsd: z
+    .string()
+    .describe('Their median pay in US dollars a year. A decimal string.'),
+});
+
+const genderGapShape = {
+  women: genderSideShape,
+  men: genderSideShape,
+  gapPercent: z
+    .string()
+    .describe(
+      'The women\'s median against the men\'s, as a percentage of the men\'s with one decimal: "-8.3" means the women\'s median is 8.3% lower, "4.0" that it is 4.0% higher. A decimal string.',
+    ),
+};
+
+export const genderGapResponseSchema = z.object({
+  asOf: z
+    .string()
+    .describe(
+      'YYYY-MM-DD: the day "current salary" and the exchange rates refer to.',
+    ),
+  currency: z.literal('USD'),
+  minimumGroupSize: z
+    .int()
+    .describe(
+      'A level is only compared when women and men each number at least this many, so that nobody can be picked out from a median.',
+    ),
+  overall: z
+    .object(genderGapShape)
+    .nullable()
+    .describe(
+      'The gap for everyone who matches together; null unless both women and men number at least `minimumGroupSize`.',
+    ),
+  levels: z
+    .array(
+      z.object({
+        level: z.int(),
+        label: z.string(),
+        ...genderGapShape,
+      }),
+    )
+    .describe('The levels that can be compared, in numeric order.'),
+  hiddenLevels: z
+    .int()
+    .describe(
+      'Levels left out because women or men there number fewer than `minimumGroupSize`.',
+    ),
+  otherGender: z
+    .int()
+    .describe(
+      'Current employees of another gender, who are in neither side of the comparison.',
+    ),
+  excluded: z
+    .int()
+    .describe(
+      'Current employees left out of every figure: no salary yet, or no exchange rate for its currency.',
+    ),
+});
+export type GenderGapResponse = z.infer<typeof genderGapResponseSchema>;

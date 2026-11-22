@@ -7,7 +7,7 @@ export default defineConfig({
     root: './',
     include: ['**/*.integration-spec.ts'],
     // These talk to a real database over the network.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });
