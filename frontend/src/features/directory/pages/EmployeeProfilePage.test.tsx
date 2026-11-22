@@ -84,6 +84,8 @@ beforeEach(() => {
   vi.spyOn(employeesApi, 'filterOptions').mockResolvedValue({
     countries: [],
     departments: [],
+    levels: [],
+    jobTitles: [],
   });
   vi.spyOn(employeesApi, 'list').mockResolvedValue({
     items: [person],

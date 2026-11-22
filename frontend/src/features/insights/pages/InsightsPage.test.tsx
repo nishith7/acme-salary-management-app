@@ -93,6 +93,8 @@ beforeEach(() => {
       { code: 'IN', name: 'India' },
     ],
     departments: ['Engineering', 'Finance'],
+    levels: [],
+    jobTitles: [],
   });
   // The directory, for the test that opens this page from it.
   vi.spyOn(employeesApi, 'list').mockResolvedValue({

@@ -135,12 +135,16 @@ export interface EmployeeListResponse {
   total: number;
 }
 
-/** What the country and department filters can be set to (`GET /employees/filter-options`). */
+/** What the directory's filters can be set to (`GET /employees/filter-options`). */
 export interface FilterOptions {
   /** Ordered by name. `code` is what the `countries` filter takes. */
   countries: { code: string; name: string }[];
   /** Ordered by name; each is what the `departments` filter takes. */
   departments: string[];
+  /** The levels that exist, ascending; each is what the `levels` filter takes. */
+  levels: number[];
+  /** The job titles that exist, in order; each is what the `jobTitles` filter takes. */
+  jobTitles: string[];
 }
 
 export function createEmployeesApi(client: ApiClient) {

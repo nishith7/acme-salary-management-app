@@ -32,6 +32,8 @@ beforeEach(() => {
       { code: 'US', name: 'United States' },
     ],
     departments: ['Engineering', 'Finance'],
+    levels: [1, 3, 10],
+    jobTitles: ['Analyst', 'Engineer'],
   });
   // 1,000 matches, so there are pages to move between.
   list = vi
@@ -55,7 +57,8 @@ async function openDirectory() {
 
 async function choose(
   user: ReturnType<typeof userEvent.setup>,
-  filter: 'Country' | 'Department',
+  filter:
+    'Country' | 'Department' | 'Pay band' | 'Level' | 'Tenure' | 'Job title',
   option: string,
 ) {
   await user.click(screen.getByRole('combobox', { name: filter }));
@@ -144,6 +147,69 @@ describe('filtering the directory', () => {
         pageSize: 25,
       }),
     );
+  });
+});
+
+describe('the pay band, level, tenure and job title filters', () => {
+  it('asks for people below their pay band', async () => {
+    const user = userEvent.setup();
+    await openDirectory();
+
+    await choose(user, 'Pay band', 'Below band');
+
+    await waitFor(() =>
+      expect(lastQuery(list)).toMatchObject({ bandPositions: ['BELOW'] }),
+    );
+  });
+
+  it('keeps level, tenure and job title behind "More filters" and sends levels as numbers', async () => {
+    const user = userEvent.setup();
+    await openDirectory();
+    expect(screen.queryByRole('combobox', { name: 'Level' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    await choose(user, 'Level', 'Level 3');
+    await choose(user, 'Level', 'Level 10');
+    await choose(user, 'Tenure', 'Under 1 yr');
+    await choose(user, 'Job title', 'Analyst');
+
+    await waitFor(() =>
+      expect(lastQuery(list)).toMatchObject({
+        levels: [3, 10],
+        tenureBands: ['0-1'],
+        jobTitles: ['Analyst'],
+      }),
+    );
+    expect(screen.getByRole('combobox', { name: 'Level' })).toHaveTextContent(
+      '2 levels',
+    );
+  });
+
+  it('shows how many hidden filters are on, and "Clear filters" turns them off', async () => {
+    const user = userEvent.setup();
+    await openDirectory();
+    await user.click(screen.getByRole('button', { name: 'More filters' }));
+    await choose(user, 'Level', 'Level 3');
+    await choose(user, 'Job title', 'Engineer');
+    await user.click(screen.getByRole('button', { name: /^More filters/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'Level' })).toBeNull(),
+    );
+
+    // Closed, the button still says two are on.
+    expect(
+      screen.getByRole('button', { name: 'More filters (2)' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    await waitFor(() => {
+      expect(lastQuery(list)).not.toHaveProperty('levels');
+      expect(lastQuery(list)).not.toHaveProperty('jobTitles');
+    });
+    expect(
+      screen.getByRole('button', { name: 'More filters' }),
+    ).toBeInTheDocument();
   });
 });
 

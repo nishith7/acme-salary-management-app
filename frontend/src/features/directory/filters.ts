@@ -1,4 +1,9 @@
-import type { EmployeeQuery, EmployeeStatus } from '../../api/employees.ts';
+import type {
+  BandPosition,
+  EmployeeQuery,
+  EmployeeStatus,
+  TenureBand,
+} from '../../api/employees.ts';
 
 /**
  * What the search box and the filter controls are set to. Empty means "no restriction":
@@ -10,6 +15,12 @@ export interface DirectoryFilters {
   /** ISO country codes, for example `IN`. */
   countries: string[];
   departments: string[];
+  /** Where the salary sits against the pay band for the person's country and level. */
+  bandPositions: BandPosition[];
+  /** Numbers, as the API takes them: 1 is the most junior. */
+  levels: number[];
+  tenureBands: TenureBand[];
+  jobTitles: string[];
 }
 
 export const NO_FILTERS: DirectoryFilters = {
@@ -17,6 +28,10 @@ export const NO_FILTERS: DirectoryFilters = {
   statuses: [],
   countries: [],
   departments: [],
+  bandPositions: [],
+  levels: [],
+  tenureBands: [],
+  jobTitles: [],
 };
 
 /** True when something narrows the list, which is when "Clear filters" has work to do. */
@@ -25,7 +40,21 @@ export function hasActiveFilters(filters: DirectoryFilters): boolean {
     filters.search.trim() !== '' ||
     filters.statuses.length > 0 ||
     filters.countries.length > 0 ||
-    filters.departments.length > 0
+    filters.departments.length > 0 ||
+    filters.bandPositions.length > 0 ||
+    countMoreFilters(filters) > 0
+  );
+}
+
+/**
+ * How many of the filters kept behind "More filters" (level, tenure, job title) are on, so the
+ * button can say so while they are hidden.
+ */
+export function countMoreFilters(filters: DirectoryFilters): number {
+  return (
+    Number(filters.levels.length > 0) +
+    Number(filters.tenureBands.length > 0) +
+    Number(filters.jobTitles.length > 0)
   );
 }
 
@@ -35,7 +64,17 @@ export function hasActiveFilters(filters: DirectoryFilters): boolean {
  */
 export function toEmployeeFilterQuery(
   filters: DirectoryFilters,
-): Pick<EmployeeQuery, 'search' | 'statuses' | 'countries' | 'departments'> {
+): Pick<
+  EmployeeQuery,
+  | 'search'
+  | 'statuses'
+  | 'countries'
+  | 'departments'
+  | 'bandPositions'
+  | 'levels'
+  | 'tenureBands'
+  | 'jobTitles'
+> {
   const search = filters.search.trim();
   return {
     ...(search && { search }),
@@ -44,5 +83,11 @@ export function toEmployeeFilterQuery(
     ...(filters.departments.length > 0 && {
       departments: filters.departments,
     }),
+    ...(filters.bandPositions.length > 0 && {
+      bandPositions: filters.bandPositions,
+    }),
+    ...(filters.levels.length > 0 && { levels: filters.levels }),
+    ...(filters.tenureBands.length > 0 && { tenureBands: filters.tenureBands }),
+    ...(filters.jobTitles.length > 0 && { jobTitles: filters.jobTitles }),
   };
 }
