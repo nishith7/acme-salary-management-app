@@ -1,6 +1,6 @@
 # ACME Salary Management — Requirements
 
-**Status:** v1 · **Owner:** <your name> · **Date:** 18 Nov 2026, revised 19 Nov 2026
+**Status:** v1 · **Owner:** <your name> · **Date:** 18 Nov 2026, revised 22 Nov 2026
 
 ## 1. Goal
 
@@ -29,10 +29,12 @@ ACME's HR team manages compensation for ~10,000 employees across multiple countr
 - **Reading of the brief.** "Manage the salary data via web-based software" is taken to mean that the app replaces the spreadsheets as the place where compensation is maintained, not a viewer on top of them: otherwise HR would keep editing Excel and the tedium would remain. The people data (who works at ACME, with their title, department and country) is loaded once and is not maintained in the app (§4). Pay is: one change at a time (F4), and big events such as the annual review as a bulk update from a spreadsheet (F6), so nobody re-types 10,000 rows. F8, a raise applied by rule to a filtered group, is a later addition to the same mechanism.
 - **A system of record for compensation, not payroll.** Salaries are stored as *effective-dated history*, never overwritten, so every change is auditable and growth over time can be computed (enables F3, F9). An import adds a salary record only when the amount differs from the current one.
 - **Multi-currency:** salaries are stored in local currency; comparisons use a fixed, dated USD exchange-rate table so results are reproducible.
-- **Built for employees later:** authentication with roles (`HR_ADMIN` now; `EMPLOYEE` later), a `users` table optionally linked to an employee, and authorisation enforced in the service layer (ownership checks), so "employee views own salary" is a new role + screens, not a redesign.
+- **Built for employees later:** authentication with roles (`HR_ADMIN` now; `EMPLOYEE` reserved), and authorisation enforced in the service layer (ownership checks), so "employee views own salary" is a new role, one small migration (a user is not yet linked to an employee) and new screens, not a redesign. §6.1 lists what is still missing.
 - **Privacy:** insight views hide segments with fewer than 5 people so individuals can't be identified.
 
 ## 4. Deliberately out of scope
+
+Left out of v1, not forgotten: the ones that are natural next steps (payroll, payslips, tax, employee self-service, leave) are worked through in §6.
 
 | Left out | Why |
 |---|---|
@@ -53,3 +55,54 @@ ACME's HR team manages compensation for ~10,000 employees across multiple countr
 - Directory search/filter/sort responds in < 500 ms at 10k employees; insight queries in < 1 s (aggregations done in the database); a bulk update of 10,000 rows (validate and apply) takes under a minute; exporting the directory takes a few seconds. These are targets, measured later.
 - Every salary change is traceable (who, when, why, and which upload it came from); no money stored as floating point.
 - **Success:** the HR Manager can update salaries from a spreadsheet, with every bad row caught before anything is saved, and answer "median pay by level in each country" and "who is paid below band" in under a minute, without exporting data.
+
+## 6. Where this could go next
+
+v1 is the compensation record. These are the extensions an HR team would ask for next. None is built. Each says why it matters, what v1 already gives it and what is still missing, so the real cost is visible. Several come from watching how HR works day to day, for example employees asking HR for payslips one by one.
+
+### 6.1 Employees sign in and see their own salary and profile
+
+- **Why:** "What is my salary?" and "when was my last raise?" go to HR today. Self-service turns HR from a help desk back into owners of the data.
+- **Already in v1:** the `EMPLOYEE` role, the guards, and the rule that every HR controller is `HR_ADMIN` only (an employee token already gets 403 on all of them). The profile and salary history exist for HR.
+- **Still needed:** a link from a user to an employee (a nullable column; today the two tables are not linked), sign-in by work email (the people data holds no email), a "me" endpoint that takes the employee from the token and never from the URL, and a read-only screen. An employee must never reach other people's pay or the insights.
+
+### 6.2 Employees download their own payslips and salary letters
+
+- **Why:** people ask HR for payslips for purposes of their own, and HR assembles each one by hand. Self-service removes that queue.
+- **Already in v1:** nothing for payslips; they are left out on purpose (§4) because without real payroll figures we would be inventing numbers. A **salary certificate** (a letter stating the current salary) is different: it needs only what we already hold, so it can come first.
+- **Still needed:** §6.1 (sign-in), and §6.3 or §6.4 for the figures. A payslip is kept as a record per pay period, not regenerated on request, so what the employee downloaded is what HR can see later. Each download is logged, and HR can issue one on someone's behalf.
+
+### 6.3 Payroll integration, automated or done by HR
+
+- **Why:** payroll is run elsewhere from a copy of the salaries, and two copies drift apart. It is also what finally makes "was this person paid?" an honest question: §4 left pay status out because, without a payroll feed, it means 10,000 manual entries.
+- **Already in v1:** the history is effective-dated, so "the salary on 1 March" can be answered; the export (F7) already gives payroll the current salaries as a file; every bulk change traces to its upload.
+- **Two modes:** *by HR* (download a file in the layout the payroll provider expects, upload it there, record that it was sent) and *automated* (a monthly push to the provider's API, with failures visible to HR, and the provider reporting back what was paid). The file mode works with any provider, so it comes first; automation is added per provider.
+- **Still needed:** a chosen provider, a mapping of our fields to theirs, and a payroll-run record per period (inputs, status, who sent it). Its inputs include the unpaid days from §6.5.
+
+### 6.4 Salary breakdown and country-wise tax and deductions
+
+- **Why:** one annual figure hides how pay is built. Components (basic, allowances, bonus) and statutory deductions differ by country, and a payslip needs both.
+- **Already in v1:** one base amount per salary record, in local currency, effective-dated, with a country on every employee. Bonus and equity are listed in §4 as "can extend the same model", and this is that extension.
+- **Still needed:** a salary structure of components, dated like salaries; per-country rule sets (tax slabs, contributions), versioned by effective date because they change every year; and a decision on who owns them. Start with the breakdown and gross pay, show tax only as a labelled estimate, and let a payroll provider (§6.3) supply the real net pay where there is one. This is the largest reversal of §4's "we don't compute net pay", so it is last in the order below.
+
+### 6.5 Leave management
+
+- **Why:** pay depends on attendance: unpaid leave lowers that month's pay. Without leave data the inputs to payroll live in yet another spreadsheet.
+- **Already in v1:** a country, a joining date and a status on every employee; nothing about leave.
+- **Still needed:** leave types and balances by country policy, a holiday calendar per country, requests and approvals (which brings in a manager role and the approval workflows §4 left out), and a monthly total of unpaid days handed to payroll (§6.3). The biggest of these extensions: it is a product of its own, so the choice between building it and integrating one should be made deliberately.
+
+### 6.6 Everyday HR features, in the style of Keka
+
+- **Why:** birthday and work-anniversary reminders, a holiday calendar, an org chart, increment-due and probation-end reminders, announcements. They give employees a reason to open the app other than pay, which is what makes self-service (§6.1) worth the effort.
+- **Already in v1:** the joining date, so work anniversaries and tenure milestones need nothing new, and increment-due dates (F9) follow the same approach.
+- **Still needed:** a date of birth, which is not held (a new personal field, so decide who may see it; day and month only is enough for reminders); a notification channel such as email (§4 left notifications out); and a reports-to link for the org chart.
+
+### 6.7 Suggested order
+
+1. **Employee sign-in (§6.1).** The smallest step, the hooks exist, and it unlocks §6.2 and §6.6.
+2. **Salary breakdown without tax (§6.4), and the salary certificate (§6.2).** They use only data we hold or can add cheaply.
+3. **Leave (§6.5), then payroll integration (§6.3).** Payroll needs the unpaid days as an input, so leave comes first.
+4. **Payslips (§6.2), then tax by country (§6.4).** Both need real figures from payroll.
+5. **Everyday features (§6.6)** at any time after step 1.
+
+Before building any of these: new personal data (date of birth, bank details, tax numbers) needs the same care as salary (who can see it, who looked); people data stays in HR's own records (§4), so employee identity comes from there; and leave, payroll and tax are products in their own right, so for each the question is build or integrate.
