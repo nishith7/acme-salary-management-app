@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authApi, employeesApi, insightsApi } from '../../../api/index.ts';
-import type { PayInsights } from '../../../api/insights.ts';
+import type { GenderGapInsights, PayInsights } from '../../../api/insights.ts';
 import { paths } from '../../../app/paths.ts';
 import { renderApp } from '../../../test/render-app.tsx';
 
@@ -42,7 +42,39 @@ const insights: PayInsights = {
   excluded: 1,
 };
 
+// Its numbers differ from the pay figures above, so a lookup by text never finds two.
+const gap: GenderGapInsights = {
+  asOf: '2026-11-20',
+  currency: 'USD',
+  minimumGroupSize: 5,
+  overall: {
+    women: { headcount: 11, medianUsd: '64000.00' },
+    men: { headcount: 9, medianUsd: '72500.00' },
+    gapPercent: '-11.7',
+  },
+  levels: [
+    {
+      level: 2,
+      label: 'Level 2',
+      women: { headcount: 5, medianUsd: '61000.00' },
+      men: { headcount: 5, medianUsd: '66500.00' },
+      gapPercent: '-8.3',
+    },
+    {
+      level: 3,
+      label: 'Level 3',
+      women: { headcount: 8, medianUsd: '90500.00' },
+      men: { headcount: 7, medianUsd: '88000.00' },
+      gapPercent: '2.8',
+    },
+  ],
+  hiddenLevels: 2,
+  otherGender: 3,
+  excluded: 0,
+};
+
 let pay: ReturnType<typeof vi.spyOn>;
+let genderGap: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.spyOn(authApi, 'restoreSession').mockResolvedValue({
@@ -70,6 +102,7 @@ beforeEach(() => {
     total: 0,
   });
   pay = vi.spyOn(insightsApi, 'pay').mockResolvedValue(insights);
+  genderGap = vi.spyOn(insightsApi, 'genderGap').mockResolvedValue(gap);
 });
 
 afterEach(() => {
@@ -77,6 +110,8 @@ afterEach(() => {
 });
 
 const lastBody = () => pay.mock.lastCall?.[0] as Record<string, unknown>;
+const lastGapBody = () =>
+  genderGap.mock.lastCall?.[0] as Record<string, unknown>;
 
 async function open() {
   const user = userEvent.setup();
@@ -179,7 +214,9 @@ describe('the pay insights page', () => {
     expect(
       await screen.findByText(/fewer than 5 people match these filters/i),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('table', { name: 'Pay by country' }),
+    ).not.toBeInTheDocument();
   });
 
   it('offers to try again when the figures could not be loaded', async () => {
@@ -196,5 +233,104 @@ describe('the pay insights page', () => {
     expect(
       screen.getByText(/could not load the pay figures/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe('the gender pay gap on the insights page', () => {
+  const gapTable = () =>
+    screen.findByRole('table', { name: 'Gender pay gap by level' });
+
+  it('compares women and men level by level, and says plainly which side is higher', async () => {
+    await open();
+
+    const table = await gapTable();
+    const level2 = within(table).getByRole('row', { name: /level 2/i });
+    expect(level2).toHaveTextContent('$61,000');
+    expect(level2).toHaveTextContent('$66,500');
+    expect(level2).toHaveTextContent('8.3% lower');
+    expect(
+      within(table).getByRole('row', { name: /level 3/i }),
+    ).toHaveTextContent('2.8% higher');
+    expect(screen.getByText(/overall: 11\.7% lower/i)).toHaveTextContent(
+      '11 women',
+    );
+    expect(screen.getByText(/overall: 11\.7% lower/i)).toHaveTextContent(
+      '9 men',
+    );
+  });
+
+  it('asks for the same people as the pay figures, with no grouping, and follows the country choice', async () => {
+    const user = await open();
+    await gapTable();
+    expect(lastGapBody()).toEqual({});
+
+    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await user.click(
+      await within(await screen.findByRole('listbox')).findByRole('option', {
+        name: 'India',
+      }),
+    );
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(lastGapBody()).toEqual({ countries: ['IN'] }));
+  });
+
+  it('suggests choosing one country while all countries are mixed together, and stops once one is chosen', async () => {
+    const user = await open();
+    await gapTable();
+    expect(
+      screen.getByText(/choose one country above to compare like with like/i),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await user.click(
+      await within(await screen.findByRole('listbox')).findByRole('option', {
+        name: 'India',
+      }),
+    );
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(
+          /choose one country above to compare like with like/i,
+        ),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('says what it left out, and why', async () => {
+    await open();
+    await gapTable();
+
+    expect(
+      screen.getByText(
+        /2 levels not shown: fewer than 5 women or fewer than 5 men there/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /3 employees of another gender are not part of this comparison/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains, and shows no table, when there are too few women or men to compare', async () => {
+    genderGap.mockResolvedValue({
+      ...gap,
+      overall: null,
+      levels: [],
+      hiddenLevels: 3,
+    });
+    await open();
+
+    expect(
+      await screen.findByText(
+        /fewer than 5 women or fewer than 5 men match these filters/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('table', { name: 'Gender pay gap by level' }),
+    ).not.toBeInTheDocument();
   });
 });

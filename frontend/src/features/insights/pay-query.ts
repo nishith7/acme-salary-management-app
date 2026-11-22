@@ -1,4 +1,8 @@
-import type { PayGrouping, PayQuery } from '../../api/insights.ts';
+import type {
+  GenderGapQuery,
+  PayGrouping,
+  PayQuery,
+} from '../../api/insights.ts';
 
 /** What the insights page lets the person choose. Empty means "no restriction", not "none". */
 export interface PayChoices {
@@ -30,4 +34,10 @@ export function toPayQuery(choices: PayChoices): PayQuery {
 /** True when a filter narrows the people, which is when "Clear filters" has work to do. */
 export function hasPayFilters(choices: PayChoices): boolean {
   return choices.countries.length > 0 || choices.departments.length > 0;
+}
+
+/** The request body for the gender gap: the same filters, and no grouping (it is always by level). */
+export function toGenderGapQuery(choices: PayChoices): GenderGapQuery {
+  const { groupBy: _groupBy, ...filters } = toPayQuery(choices);
+  return filters;
 }

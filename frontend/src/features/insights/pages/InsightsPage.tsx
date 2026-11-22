@@ -19,6 +19,7 @@ import type { PayGrouping, PayInsights } from '../../../api/insights.ts';
 import { paths } from '../../../app/paths.ts';
 import { BackIcon } from '../../../components/icons.tsx';
 import { MultiSelectFilter } from '../../directory/components/MultiSelectFilter.tsx';
+import { GenderGapSection } from '../components/GenderGapSection.tsx';
 import {
   formatDate,
   formatUsd,
@@ -337,6 +338,8 @@ export function InsightsPage() {
             </Box>
           </Paper>
         )}
+
+        <GenderGapSection choices={choices} />
       </Box>
     </>
   );

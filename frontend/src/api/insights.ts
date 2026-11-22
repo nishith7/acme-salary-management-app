@@ -49,6 +49,51 @@ export interface PayInsights {
   excluded: number;
 }
 
+/** The body of `QUERY /insights/gender-gap`: the filters only, since the gap is always by level. */
+export interface GenderGapQuery {
+  countries?: string[];
+  departments?: string[];
+  levels?: number[];
+}
+
+/** How many people, and their median pay in US dollars a year. */
+export interface GenderSide {
+  headcount: number;
+  medianUsd: string;
+}
+
+export interface GenderGap {
+  women: GenderSide;
+  men: GenderSide;
+  /**
+   * The women's median against the men's, as a percentage of the men's, with one decimal and
+   * as text: "-8.3" means the women's median is 8.3% lower, "4.0" that it is 4.0% higher.
+   */
+  gapPercent: string;
+}
+
+export interface GenderGapLevel extends GenderGap {
+  level: number;
+  label: string;
+}
+
+export interface GenderGapInsights {
+  /** YYYY-MM-DD */
+  asOf: string;
+  currency: 'USD';
+  /** A level is compared only when women and men each number at least this many. */
+  minimumGroupSize: number;
+  /** Everyone together; null unless both sides are big enough. */
+  overall: GenderGap | null;
+  levels: GenderGapLevel[];
+  /** Levels left out because women or men there are too few. */
+  hiddenLevels: number;
+  /** People of another gender: in neither side of the comparison. */
+  otherGender: number;
+  /** Current employees left out of every figure: no salary, or no exchange rate. */
+  excluded: number;
+}
+
 export function createInsightsApi(client: ApiClient) {
   return {
     /**
@@ -59,6 +104,21 @@ export function createInsightsApi(client: ApiClient) {
       const { data } = await client.http.request<PayInsights>({
         method: 'QUERY',
         url: '/insights/pay',
+        data: query,
+        headers: { 'Content-Type': 'application/json' },
+        signal,
+      });
+      return data;
+    },
+
+    /** The median pay of women against men, level by level and overall. */
+    async genderGap(
+      query: GenderGapQuery,
+      signal?: AbortSignal,
+    ): Promise<GenderGapInsights> {
+      const { data } = await client.http.request<GenderGapInsights>({
+        method: 'QUERY',
+        url: '/insights/gender-gap',
         data: query,
         headers: { 'Content-Type': 'application/json' },
         signal,

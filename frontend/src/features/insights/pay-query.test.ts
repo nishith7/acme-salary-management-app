@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasPayFilters, toPayQuery } from './pay-query.ts';
+import { hasPayFilters, toGenderGapQuery, toPayQuery } from './pay-query.ts';
 
 // The API answers 400 to an empty list, so "nothing chosen" must never reach the body as one.
 describe('the request body built from the choices', () => {
@@ -30,5 +30,24 @@ describe('the request body built from the choices', () => {
     expect(
       hasPayFilters({ groupBy: 'country', countries: ['IN'], departments: [] }),
     ).toBe(true);
+  });
+});
+
+describe('the gender gap request body', () => {
+  it('is only the filters that are chosen: no grouping (it is always by level), and no empty lists', () => {
+    expect(
+      toGenderGapQuery({
+        groupBy: 'department',
+        countries: [],
+        departments: [],
+      }),
+    ).toEqual({});
+    expect(
+      toGenderGapQuery({
+        groupBy: 'level',
+        countries: ['IN'],
+        departments: ['Engineering'],
+      }),
+    ).toEqual({ countries: ['IN'], departments: ['Engineering'] });
   });
 });
