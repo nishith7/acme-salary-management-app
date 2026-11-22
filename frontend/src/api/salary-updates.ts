@@ -35,6 +35,8 @@ export interface SalaryUpdateRow {
 export interface SalaryUpdateReport {
   /** What is wrong with the file as a whole; when there are any, there are no rows. */
   fileProblems: string[];
+  /** How the file was read, when worth knowing and harmless: for example that dates written day-month-year were read as such. */
+  notices: string[];
   rows: SalaryUpdateRow[];
   summary: {
     rows: number;

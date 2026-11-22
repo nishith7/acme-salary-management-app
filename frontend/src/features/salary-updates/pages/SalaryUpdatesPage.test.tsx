@@ -17,6 +17,7 @@ vi.mock('../../../lib/save-file.ts', () => ({ saveBlob: vi.fn() }));
 
 const report: SalaryUpdateReport = {
   fileProblems: [],
+  notices: [],
   rows: [
     {
       line: 2,
@@ -190,11 +191,31 @@ describe('the bulk salary update page', () => {
     expect(within(grid).getByText('Promotion')).toBeInTheDocument();
   });
 
+  it('tells the person how dates written day-month-year were read, above the table', async () => {
+    vi.spyOn(salaryUpdatesApi, 'preview').mockResolvedValue({
+      ...report,
+      notices: [
+        '2 dates are written day-month-year, for example "01-12-2026", which is read as 1 December 2026. The table shows how each one was read.',
+      ],
+    });
+    const user = setup();
+    renderApp(paths.salaryUpdates);
+    await screen.findByRole('heading', { name: 'Bulk salary update' });
+
+    await chooseFile(user, csvFile());
+
+    expect(
+      await screen.findByText(/which is read as 1 December 2026/),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('grid')).toBeInTheDocument();
+  });
+
   it('says what is wrong with a file that cannot be used, and shows no table', async () => {
     vi.spyOn(salaryUpdatesApi, 'preview').mockResolvedValue({
       fileProblems: [
         'The file is missing the column "Reason". Download the template to get the right columns.',
       ],
+      notices: [],
       rows: [],
       summary: {
         rows: 0,
@@ -271,6 +292,7 @@ describe('the bulk salary update page', () => {
 describe('applying a bulk salary update', () => {
   const clean: SalaryUpdateReport = {
     fileProblems: [],
+    notices: [],
     rows: [report.rows[3]!],
     summary: {
       rows: 1,
@@ -283,6 +305,7 @@ describe('applying a bulk salary update', () => {
   };
   const nothing: SalaryUpdateReport = {
     fileProblems: [],
+    notices: [],
     rows: [report.rows[1]!],
     summary: {
       rows: 1,

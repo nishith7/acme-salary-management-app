@@ -250,10 +250,10 @@ export function SalaryUpdatesPage() {
                 It lists everyone who can still be given a salary, with their
                 current salary. For the people getting a change, fill in{' '}
                 <strong>New annual salary</strong> (digits and a dot, for
-                example 52000.50), <strong>Effective from</strong> (YYYY-MM-DD,
-                for example 2026-12-01) and <strong>Reason</strong> (Promotion,
-                Merit increase, Market adjustment or Correction). Leave everyone
-                else empty.
+                example 52000.50), <strong>Effective from</strong> (a date such
+                as 2026-12-01, or day first as Excel saves it, 01-12-2026) and{' '}
+                <strong>Reason</strong> (Promotion, Merit increase, Market
+                adjustment or Correction). Leave everyone else empty.
               </Typography>
               <Button
                 variant="outlined"
@@ -270,15 +270,6 @@ export function SalaryUpdatesPage() {
                   again.
                 </Alert>
               )}
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                component="p"
-                sx={{ mt: 1.5 }}
-              >
-                Tip: Excel can turn 2026-12-01 into another date format. Format
-                the Effective from column as Text before you type the dates.
-              </Typography>
             </Step>
 
             <Step number={2} title="Choose your file">
@@ -343,6 +334,11 @@ export function SalaryUpdatesPage() {
             {report && file && report.fileProblems.length === 0 && (
               <>
                 <Step number={3} title="Check what would happen">
+                  {report.notices.map((notice) => (
+                    <Alert key={notice} severity="info" sx={{ mb: 2 }}>
+                      {notice}
+                    </Alert>
+                  ))}
                   <UpdatePreview
                     key={String(preview.submittedAt)}
                     report={report}
