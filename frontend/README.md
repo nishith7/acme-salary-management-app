@@ -18,7 +18,7 @@ src/
     directory/  the employee table: columns, cell parts, formatting, the query hook, the page,
                 and the search box and filters above it (`filters.ts` turns them into the request body)
     salary-updates/  the bulk salary update: download the template, choose a CSV, see every row checked
-    insights/  pay by country, department and level: medians and quartiles in US dollars, groups under 5 people hidden
+    insights/  pay by country, department and level (medians and quartiles in US dollars) and the gender pay gap by level; groups under 5 people hidden
   layouts/    frames around screens (AppShell: top bar, who is signed in, sign out)
   lib/        small helpers with no UI (saving a downloaded file)
   pages/      screens that belong to no feature (not found, no access)
