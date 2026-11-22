@@ -54,7 +54,7 @@ export class SalaryUpdatesController {
   @ApiOperation({
     summary: 'Download the template for a bulk salary update',
     description:
-      'A CSV of everyone who can still be given a salary (not those who have left), with their current salary, and three empty columns to fill in for the people getting a change: `New annual salary`, `Effective from` (YYYY-MM-DD) and `Reason`. Rows left empty are ignored.',
+      'A CSV of everyone who can still be given a salary (not those who have left), with their current salary, and three empty columns to fill in for the people getting a change: `New annual salary`, `Effective from` (YYYY-MM-DD, or day-month-year such as 01-12-2026, as a spreadsheet saves it) and `Reason`. Rows left empty are ignored.',
   })
   @ApiProduces('text/csv')
   @ApiOkResponse({ description: 'The CSV file.', schema: { type: 'string' } })

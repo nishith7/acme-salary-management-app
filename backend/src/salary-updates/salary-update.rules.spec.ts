@@ -269,13 +269,13 @@ describe('checkSalaryUpdate: rows with errors', () => {
     );
   });
 
-  it('wants the date as YYYY-MM-DD, real, and not before the person joined, and says why a date like 01/12/2026 is refused', () => {
+  it('wants a date that exists, in a layout it knows, and not before the person joined', () => {
     expect(only('EMP-00001,52000,2026-02-30,Merit').errors.join(' ')).toContain(
       'Effective from',
     );
-    expect(only('EMP-00001,52000,01/12/2026,Merit').errors.join(' ')).toContain(
-      'YYYY-MM-DD',
-    );
+    expect(
+      only('EMP-00001,52000,next Monday,Merit').errors.join(' '),
+    ).toContain('YYYY-MM-DD');
     expect(only('EMP-00001,52000,,Merit').errors.join(' ')).toContain(
       'Effective from is missing',
     );
@@ -371,5 +371,58 @@ describe('checkSalaryUpdate: a file that cannot be read', () => {
     expect(report.fileProblems).toHaveLength(1);
     expect(report.rows).toEqual([]);
     expect(report.summary.rows).toBe(0);
+  });
+});
+
+describe('dates in the file', () => {
+  const effectiveFromOf = (written: string) =>
+    analyse(rowsOf(`EMP-00001,52000,${written},Merit`)).report;
+
+  // Excel turns a typed 2026-05-01 into a real date and saves it in the computer's regional
+  // style, so the file that comes back is rarely year first.
+  it('reads a date written day-month-year, as Excel saves it, and says how it was read', () => {
+    for (const written of ['01-05-2026', '1/5/2026', '01.05.2026']) {
+      const report = effectiveFromOf(written);
+
+      expect(report.rows[0]?.change?.effectiveFrom, written).toBe('2026-05-01');
+      expect(report.notices.join(' '), written).toContain('1 May 2026');
+    }
+  });
+
+  it('reads a date written year first as it is, with nothing to say about it', () => {
+    for (const written of ['2026-05-01', '2026/05/01', '2026.5.1']) {
+      const report = effectiveFromOf(written);
+
+      expect(report.rows[0]?.change?.effectiveFrom, written).toBe('2026-05-01');
+      expect(report.notices, written).toEqual([]);
+    }
+  });
+
+  it('still refuses a date that does not exist or has no known layout', () => {
+    for (const written of [
+      '31-02-2026',
+      '2026-13-01',
+      'May 1st 2026',
+      '01-05-26',
+    ]) {
+      const row = effectiveFromOf(written).rows[0];
+
+      expect(row?.outcome, written).toBe('ERROR');
+      expect(row?.errors.join(' '), written).toContain('Effective from');
+    }
+  });
+
+  it('refuses the whole file when a date can only be month-day-year, so such a file is never read wrongly', () => {
+    const { file } = analyse(
+      rowsOf(
+        'EMP-00001,52000,05/13/2026,Merit',
+        'EMP-00003,40000,05/01/2026,Hire',
+      ),
+    );
+
+    expect(file.problems).toHaveLength(1);
+    expect(file.problems[0]).toContain('05/13/2026');
+    expect(file.problems[0]).toContain('line 2');
+    expect(file.problems[0]).toContain('YYYY-MM-DD');
   });
 });

@@ -74,6 +74,11 @@ export const salaryUpdateReportSchema = z.object({
     .describe(
       `What is wrong with the file as a whole (a missing column, more than ${MAX_ROWS.toLocaleString('en-US')} rows, an unclosed quote). When there are any, no row is checked.`,
     ),
+  notices: z
+    .array(z.string())
+    .describe(
+      'How the file was read, when it is worth knowing and stops nothing: for example that dates written day-month-year (01-05-2026) were read as such, with the date they became.',
+    ),
   rows: z
     .array(salaryUpdateRowSchema)
     .describe(

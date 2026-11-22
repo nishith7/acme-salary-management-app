@@ -37,6 +37,82 @@ const normalise = (text: string) =>
 
 const AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** Year first with any usual separator ("2026-05-01", "2026/5/1"): ISO order, so never in doubt. */
+const YEAR_FIRST_DATE = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/;
+/** Day first, as Excel saves a date in most of the world ("01-05-2026", "1/5/2026", "01.05.2026"). */
+const DAY_FIRST_DATE = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/;
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** The YYYY-MM-DD text of a date that exists, or null (2026-02-30 does not). */
+function isoOf(year: number, month: number, day: number): string | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const exists =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+  return exists
+    ? `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    : null;
+}
+
+/**
+ * A date cell as YYYY-MM-DD. Excel turns a typed 2026-05-01 into a real date and saves it in
+ * the computer's regional style, so a file that comes back is rarely year first and the person
+ * cannot be asked to type it that way. `dayFirst` says it was written day-month-year, which is
+ * a reading and not a fact (01-05-2026 is 1 May to most of the world and 5 January to the US),
+ * so the report says how it was read. Null when it is no date, or one that does not exist.
+ */
+export function readFileDate(
+  text: string,
+): { iso: string; dayFirst: boolean } | null {
+  const yearFirst = YEAR_FIRST_DATE.exec(text);
+  if (yearFirst) {
+    const iso = isoOf(
+      Number(yearFirst[1]),
+      Number(yearFirst[2]),
+      Number(yearFirst[3]),
+    );
+    return iso ? { iso, dayFirst: false } : null;
+  }
+  const dayFirst = DAY_FIRST_DATE.exec(text);
+  if (dayFirst) {
+    const iso = isoOf(
+      Number(dayFirst[3]),
+      Number(dayFirst[2]),
+      Number(dayFirst[1]),
+    );
+    return iso ? { iso, dayFirst: true } : null;
+  }
+  return null;
+}
+
+/** True for a date that cannot be read day first but is a real date month first: 05/13/2026. */
+function canOnlyBeMonthFirst(text: string): boolean {
+  const parts = DAY_FIRST_DATE.exec(text);
+  if (!parts) {
+    return false;
+  }
+  const [first, second, year] = [
+    Number(parts[1]),
+    Number(parts[2]),
+    Number(parts[3]),
+  ];
+  return second > 12 && isoOf(year, first, second) !== null;
+}
 
 const REASONS: Record<string, SalaryChangeReason> = {
   promotion: 'PROMOTION',
@@ -53,7 +129,10 @@ export interface SalaryUpdateEntry {
   line: number;
   employeeCode: string;
   amount: string;
+  /** YYYY-MM-DD when the cell could be read as a date (see `readFileDate`); otherwise as typed. */
   date: string;
+  /** The cell as typed, only when it was written day-month-year and has been read as such. */
+  dateAsWritten?: string;
   reason: string;
 }
 
@@ -111,6 +190,8 @@ export interface SalaryUpdateRow {
 
 export interface SalaryUpdateReport {
   fileProblems: string[];
+  /** Things to know about how the file was read, which do not stop anything. */
+  notices: string[];
   rows: SalaryUpdateRow[];
   summary: {
     /** Rows that asked for a change (a row with nothing filled in is not one). */
@@ -129,6 +210,7 @@ export interface SalaryUpdateReport {
 export function problemReport(problems: string[]): SalaryUpdateReport {
   return {
     fileProblems: problems,
+    notices: [],
     rows: [],
     summary: {
       rows: 0,
@@ -183,16 +265,53 @@ export function readSalaryUpdateFile(records: CsvRecord[]): SalaryUpdateFile {
 
   const cellAt = (row: CsvRecord, key: keyof typeof COLUMNS) =>
     (row.cells[index[key]] ?? '').trim();
-  return {
-    problems: [],
-    entries: rows.map((row) => ({
+  const entries: SalaryUpdateEntry[] = rows.map((row) => {
+    const written = cellAt(row, 'date');
+    const read = readFileDate(written);
+    return {
       line: row.line,
       employeeCode: cellAt(row, 'employeeCode'),
       amount: cellAt(row, 'amount'),
-      date: cellAt(row, 'date'),
+      // A date that can be read becomes YYYY-MM-DD here, so every later step sees one layout.
+      date: read ? read.iso : written,
+      ...(read?.dayFirst && { dateAsWritten: written }),
       reason: cellAt(row, 'reason'),
-    })),
-  };
+    };
+  });
+
+  // A file with a date like 05/13/2026 was saved month first, so its other dates (05/01/2026)
+  // would be read wrongly as day first. A wrong effective date is worse than a refused file.
+  const monthFirst = entries.find((entry) => canOnlyBeMonthFirst(entry.date));
+  if (monthFirst) {
+    return {
+      problems: [
+        `The date "${monthFirst.date}" on line ${monthFirst.line} can only be month-day-year, but dates like 01-05-2026 are read day-month-year (1 May). To be safe, write every date as YYYY-MM-DD, for example 2026-12-01.`,
+      ],
+      entries: [],
+    };
+  }
+  return { problems: [], entries };
+}
+
+/** How the dates written day-month-year were read, in one sentence, so the person can check. */
+function dateNotices(requested: SalaryUpdateEntry[]): string[] {
+  const dayFirst = requested.filter((e) => e.dateAsWritten !== undefined);
+  const example = dayFirst[0];
+  if (!example) {
+    return [];
+  }
+  const [year, month, day] = example.date.split('-').map(Number) as [
+    number,
+    number,
+    number,
+  ];
+  const which =
+    dayFirst.length === 1
+      ? 'A date is'
+      : `${dayFirst.length.toLocaleString('en-US')} dates are`;
+  return [
+    `${which} written day-month-year, for example "${example.dateAsWritten}", which is read as ${day} ${MONTHS[month - 1]} ${year}. The table shows how each one was read. A date written YYYY-MM-DD is always read exactly as it is.`,
+  ];
 }
 
 /** True for a date that exists, written YYYY-MM-DD (2026-02-30 does not). */
@@ -258,7 +377,7 @@ function checkRow(
     errors.push('Effective from is missing.');
   } else if (!isRealIsoDate(entry.date)) {
     errors.push(
-      `Effective from "${entry.date}" is not a valid date: write it as YYYY-MM-DD, for example 2026-12-01 (a date like 01/12/2026 is ambiguous, so it is not accepted).`,
+      `Effective from "${entry.date}" is not a valid date: write it as YYYY-MM-DD (for example 2026-12-01) or day-month-year (for example 01-12-2026).`,
     );
   } else {
     dateOk = true;
@@ -372,6 +491,7 @@ export function checkSalaryUpdate(
   });
   return {
     fileProblems: [],
+    notices: dateNotices(requested),
     rows,
     summary: {
       rows: rows.length,
